@@ -74,7 +74,7 @@ class Application(Tk):
 		# 画棋盘，填充颜色
 		self.canvas_bottom.create_rectangle(0*self.size,0*self.size,400*self.size,400*self.size,fill='#c51')
 		# 刻画棋盘线及九个点
-		# 先画外框粗线
+		# 先画外框粗线==============================
 		self.canvas_bottom.create_rectangle(20*self.size,20*self.size,380*self.size,380*self.size,width=3)
 		# 棋盘上的九个定位点，以中点为模型，移动位置，以作出其余八个点
 		for m in [-1,0,1]:
