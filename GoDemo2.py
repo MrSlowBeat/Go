@@ -71,7 +71,7 @@ class Application(Tk):
 		self.newGameButton2.place(x=480*self.size,y=325*self.size)
 		self.quitButton=Button(self,text='退出游戏',command=self.quit)
 		self.quitButton.place(x=480*self.size,y=350*self.size)
-		# 画棋盘，填充颜色
+		# 画棋盘，填充颜色，白色
 		self.canvas_bottom.create_rectangle(0*self.size,0*self.size,400*self.size,400*self.size,fill='#c51')
 		# 刻画棋盘线及九个点
 		# 先画外框粗线
