@@ -148,8 +148,8 @@ class Application(Tk):
 	def regret(self):
 		'''
 		悔棋函数，可悔棋一回合，下两回合不可悔棋
-		使用拷贝3恢复上一回合棋局，原棋局变为上一棋局
-		恢复完毕后，将上一棋局保存到拷贝1中，清除拷贝2,3
+		使用拷贝3恢复上上上一回合棋局，原棋局变为上上上一棋局
+		恢复完毕后，将上上上一棋局保存到拷贝1中，清除拷贝2,3
 		'''
 		# 判定是否可以悔棋，以前第三盘棋局复原棋盘
 		if self.regretchance==1:
@@ -262,9 +262,11 @@ class Application(Tk):
 					self.canvas_bottom.addtag_withtag('image',self.image_added)
 					# 棋子与位置标签position[x,y]绑定，方便“杀死”
 					self.canvas_bottom.addtag_withtag('position'+str(x)+str(y),self.image_added)
+					# 获取该棋子周围棋子的存活情况（若为队友则为空；若未对手棋子，有气则为空，无气则返回【死亡棋子列表】）
 					deadlist=self.get_deadlist(x,y)
+					# 杀死死亡的对手棋子
 					self.kill(deadlist)
-					# 判断是否重复棋局
+					# 判断是否重复棋局（即是否存在打劫现象）
 					if not self.last_2_positions==self.positions:
 						# 判断是否属于有气和杀死对方其中之一
 						if len(deadlist)>0 or self.if_dead([[x,y]],self.present+1,[x,y])==False:
@@ -315,53 +317,70 @@ class Application(Tk):
 		本函数是游戏规则的关键，初始deadlist只包含了自己的位置，每次执行时，函数尝试寻找yourPosition周围有没有空的位置，有则结束，返回False代表有气；
 		若找不到，则找自己四周的同类（不在deadlist中的）是否有气，即调用本函数，无气，则把该同类加入到deadlist，然后找下一个邻居，只要有一个有气，返回False代表有气；
 		若四周没有一个有气的同类，返回deadlist,至此结束递归
+
+		传入参数例子：[[x+i,y]],(2 if self.present==0 else 1),[x+i（列）,y（行）]
 		'''
 		for i in [-1,1]:
+			# 若右侧、左侧位置不在死亡清单里
 			if [yourPosition[0]+i,yourPosition[1]] not in deadList:
+				#右侧、左侧为空，则有气
 				if self.positions[yourPosition[1]][yourPosition[0]+i]==0:
 					return False
+			# 若下侧、上侧位置不在死亡清单里
 			if [yourPosition[0],yourPosition[1]+i] not in deadList:
+				#下侧、上侧为空，则有气
 				if self.positions[yourPosition[1]+i][yourPosition[0]]==0:
 					return False
+		# 右侧不在死亡清单里面右边是你的棋子
 		if ([yourPosition[0]+1,yourPosition[1]] not in deadList) and (self.positions[yourPosition[1]][yourPosition[0]+1]==yourChessman):
+			# 检测右边的棋子是否有气
 			midvar=self.if_dead(deadList+[[yourPosition[0]+1,yourPosition[1]]],yourChessman,[yourPosition[0]+1,yourPosition[1]])
+			# 有气
 			if not midvar:
 				return False
 			else:
+				# 无气，则加入新的死亡列表
 				deadList+=copy.deepcopy(midvar)
+		# 左侧同上
 		if ([yourPosition[0]-1,yourPosition[1]] not in deadList) and (self.positions[yourPosition[1]][yourPosition[0]-1]==yourChessman):
 			midvar=self.if_dead(deadList+[[yourPosition[0]-1,yourPosition[1]]],yourChessman,[yourPosition[0]-1,yourPosition[1]])
 			if not midvar:
 				return False
 			else:
 				deadList+=copy.deepcopy(midvar)
+		#下侧同上
 		if ([yourPosition[0],yourPosition[1]+1] not in deadList) and (self.positions[yourPosition[1]+1][yourPosition[0]]==yourChessman):
 			midvar=self.if_dead(deadList+[[yourPosition[0],yourPosition[1]+1]],yourChessman,[yourPosition[0],yourPosition[1]+1])
 			if not midvar:
 				return False
 			else:
 				deadList+=copy.deepcopy(midvar)
+		# 上侧同上
 		if ([yourPosition[0],yourPosition[1]-1] not in deadList) and (self.positions[yourPosition[1]-1][yourPosition[0]]==yourChessman):
 			midvar=self.if_dead(deadList+[[yourPosition[0],yourPosition[1]-1]],yourChessman,[yourPosition[0],yourPosition[1]-1])
 			if not midvar:
 				return False
 			else:
 				deadList+=copy.deepcopy(midvar)
-		return deadList	
+		return deadList
+	
 	# 警告消息框，接受标题和警告信息			
 	def showwarningbox(self,title,message):
 		self.canvas_bottom.delete(self.cross)
 		tkinter.messagebox.showwarning(title,message)
 	
 	def get_deadlist(self,x,y):
-		'''落子后，依次判断四周是否有棋子被杀死，并返回死棋位置列表'''
+		'''落子后，依次判断四周是否有棋子被杀死，并返回（对手）死棋位置列表'''
 		deadlist=[]
 		for i in [-1,1]:
-			# 若周围是对手的棋子且没在死亡的名单里
+			# 若右左是对手的棋子且没在死亡的名单里
 			if self.positions[y][x+i]==(2 if self.present==0 else 1) and ([x+i,y] not in deadlist):
+				# 返回右左对手棋子的存活情况（有气或无气返回【死亡棋子列表】）
 				killList=self.if_dead([[x+i,y]],(2 if self.present==0 else 1),[x+i,y])
+				# 若无气则加入【对手死亡列表】
 				if not killList==False:
 					deadlist+=copy.deepcopy(killList)
+			# 若下上是对手的棋子且没在死亡的名单里，操作同上
 			if self.positions[y+i][x]==(2 if self.present==0 else 1) and ([x,y+i] not in deadlist):		
 				killList=self.if_dead([[x,y+i]],(2 if self.present==0 else 1),[x,y+i])
 				if not killList==False:
@@ -380,12 +399,15 @@ class Application(Tk):
 				# 为落下棋子图片添加position[x,y]（列，行）标签
 				self.canvas_bottom.addtag_withtag('position'+str(list_to_recover[i][0])+str(list_to_recover[i][1]),self.image_added)
 	
-	# 杀死位置列表killList中的棋子，即删除图片，位置值置0
 	def kill(self,killList):
+		'''杀死位置列表killList中的棋子，即删除图片，位置值置0'''
 		if len(killList)>0:
 			for i in range(len(killList)):
+				# 棋子置数为0
 				self.positions[killList[i][1]][killList[i][0]]=0
+				# 删除图片
 				self.canvas_bottom.delete('position'+str(killList[i][0])+str(killList[i][1]))
+
 	# 键盘快捷键退出游戏
 	def keyboardQuit(self,event):
 		self.quit()
