@@ -154,11 +154,14 @@ class Application(Tk):
 				self.create_pB()
 			else:
 				self.create_pW()
+			# 清空当前棋盘
 			for m in range(1,self.mode_num+1):
 				for n in range(1,self.mode_num+1):
 					self.positions[m][n]=0
+			#使用棋盘拷贝3进行记录
 			for m in range(len(self.last_3_positions)):
 				for n in range(len(self.last_3_positions[m])):
+					# 记录黑白棋子的[列,行]值
 					if self.last_3_positions[m][n]==1:
 						list_of_b+=[[n,m]]
 					elif self.last_3_positions[m][n]==2:
@@ -170,6 +173,7 @@ class Application(Tk):
 				for n in range(1,self.mode_num+1):
 					self.last_2_positions[m][n]=0
 					self.last_3_positions[m][n]=0
+	
 	# 重新加载函数,删除图片，序列归零，设置一些初始参数，点击“重新开始”时调用
 	def reload(self):
 		if self.stop==1:
@@ -326,8 +330,9 @@ class Application(Tk):
 				if not killList==False:
 					deadlist+=copy.deepcopy(killList)
 		return deadlist
-	# 恢复位置列表list_to_recover为b_or_w指定的棋子
+	
 	def recover(self,list_to_recover,b_or_w):
+		'''恢复位置列表list_to_recover为b_or_w指定的棋子'''
 		if len(list_to_recover)>0:
 			for i in range(len(list_to_recover)):
 				self.positions[list_to_recover[i][1]][list_to_recover[i][0]]=b_or_w+1
