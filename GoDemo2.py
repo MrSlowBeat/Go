@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+
+
 # 使用Python内置GUI模块tkinter
 from tkinter import *
 # ttk覆盖tkinter部分对象，ttk对tkinter进行了优化
@@ -6,10 +8,12 @@ from tkinter.ttk import *
 # 深拷贝时需要用到copy模块
 import copy
 import tkinter.messagebox
-# 围棋应用对象定义
+
+
 class Application(Tk):
-	# 初始化棋盘,默认九路棋盘
+	'''围棋应用对象定义'''
 	def __init__(self,my_mode_num=9):
+		'''初始化棋盘,默认九路棋盘'''
 		Tk.__init__(self)
 		# 模式，九路棋：9，十三路棋：13，十九路棋：19
 		self.mode_num=my_mode_num
@@ -71,10 +75,10 @@ class Application(Tk):
 		self.newGameButton2.place(x=480*self.size,y=325*self.size)
 		self.quitButton=Button(self,text='退出游戏',command=self.quit)
 		self.quitButton.place(x=480*self.size,y=350*self.size)
-		# 画棋盘，填充颜色
+		# 画棋盘，填充颜色，参数（左上角x，左上角y，右下角，右下角y，填充颜色）
 		self.canvas_bottom.create_rectangle(0*self.size,0*self.size,400*self.size,400*self.size,fill='#c51')
 		# 刻画棋盘线及九个点
-		# 先画外框粗线==============================
+		# 先画外框粗线
 		self.canvas_bottom.create_rectangle(20*self.size,20*self.size,380*self.size,380*self.size,width=3)
 		# 棋盘上的九个定位点，以中点为模型，移动位置，以作出其余八个点
 		for m in [-1,0,1]:
@@ -83,7 +87,7 @@ class Application(Tk):
 				200*self.size+self.size*2,200*self.size+self.size*2,fill='#000')
 				self.canvas_bottom.move(self.oringinal,m*self.dd*(2 if self.mode_num==9 else (3 if self.mode_num==13 else 6)),
 				n*self.dd*(2 if self.mode_num==9 else (3 if self.mode_num==13 else 6)))
-		# 画中间的线条
+		# 画中间的线条，横着7条，竖着7条
 		for i in range(1,self.mode_num-1):
 			self.canvas_bottom.create_line(20*self.size,20*self.size+i*self.dd,380*self.size,20*self.size+i*self.dd,width=2)
 			self.canvas_bottom.create_line(20*self.size+i*self.dd,20*self.size,20*self.size+i*self.dd,380*self.size,width=2)
@@ -99,8 +103,9 @@ class Application(Tk):
 		self.canvas_bottom.bind('<Button-1>',self.getDown)
 		# 设置退出快捷键<Ctrl>+<D>，快速退出游戏
 		self.bind('<Control-KeyPress-d>',self.keyboardQuit)
-	# 开始游戏函数，点击“开始游戏”时调用
+	
 	def start(self):
+		'''开始游戏函数，点击“开始游戏”时调用'''
 		# 删除右侧太极图
 		self.canvas_bottom.delete(self.pW)
 		self.canvas_bottom.delete(self.pB)
@@ -113,8 +118,9 @@ class Application(Tk):
 			self.del_pB()
 		# 开始标志，解除stop
 		self.stop=None
-	# 放弃一手函数，跳过落子环节
+	
 	def passme(self):
+		'''放弃一手函数，跳过落子环节'''
 		# 悔棋恢复
 		if not self.regretchance==1:
 			self.regretchance+=1
@@ -134,8 +140,9 @@ class Application(Tk):
 			self.create_pB()
 			self.del_pW()
 			self.present=0
-	# 悔棋函数，可悔棋一回合，下两回合不可悔棋
+	
 	def regret(self):
+		'''悔棋函数，可悔棋一回合，下两回合不可悔棋'''
 		# 判定是否可以悔棋，以前第三盘棋局复原棋盘
 		if self.regretchance==1:
 			self.regretchance=0
