@@ -69,8 +69,10 @@ class Application(Tk):
 		self.regretButton['state']=DISABLED
 		self.replayButton=Button(self,text='重新开始',command=self.reload)
 		self.replayButton.place(x=480*self.size,y=275*self.size)
+		# 更改游戏模式按钮，如果当前是9路，则显示13路，否则显示9路
 		self.newGameButton1=Button(self,text=('十三' if self.mode_num==9 else '九')+'路棋',command=self.newGame1)
 		self.newGameButton1.place(x=480*self.size,y=300*self.size)
+		# 更改游戏模式按钮，如果当前是19路，则显示13路，否则显示19路
 		self.newGameButton2=Button(self,text=('十三' if self.mode_num==19 else '十九')+'路棋',command=self.newGame2)
 		self.newGameButton2.place(x=480*self.size,y=325*self.size)
 		self.quitButton=Button(self,text='退出游戏',command=self.quit)
@@ -131,7 +133,7 @@ class Application(Tk):
 		self.last_3_positions=copy.deepcopy(self.last_2_positions)
 		# 拷贝2 <- 拷贝1，拷贝2保存上上一次棋局
 		self.last_2_positions=copy.deepcopy(self.last_1_positions)
-		# 拷贝1 <- 原棋盘，拷贝1保存上一次棋局
+		# 拷贝1 <- 当前棋盘，拷贝1保存上一次棋局
 		self.last_1_positions=copy.deepcopy(self.positions)
 		# 删除image_added_sign
 		self.canvas_bottom.delete('image_added_sign')
@@ -148,11 +150,12 @@ class Application(Tk):
 	def regret(self):
 		'''
 		悔棋函数，可悔棋一回合，下两回合不可悔棋
-		使用拷贝3恢复上上上一回合棋局，原棋局变为上上上一棋局
+		使用拷贝3恢复上上上一回合棋局，当前棋局变为上上上一棋局
 		恢复完毕后，将上上上一棋局保存到拷贝1中，清除拷贝2,3
 		'''
 		# 判定是否可以悔棋，以前第三盘棋局复原棋盘
 		if self.regretchance==1:
+			# 本局悔棋后下一局不能悔棋，置数、禁用按钮
 			self.regretchance=0
 			self.regretButton['state']=DISABLED
 			list_of_b=[]
@@ -269,21 +272,28 @@ class Application(Tk):
 					# 判断是否重复棋局（即是否存在打劫现象）
 					if not self.last_2_positions==self.positions:
 						# 如果没有打劫现象
-						# 判断是否属于有气和杀死对方其中之一
+						# 判断是否属于“有气”或“杀死对方”其中之一
 						if len(deadlist)>0 or self.if_dead([[x,y]],self.present+1,[x,y])==False:
 							# 当不重复棋局，且属于有气和杀死对方其中之一时，落下棋子有效
+							# 如果可以悔棋，则将按钮激活，否则设置下一局可以悔棋
 							if not self.regretchance==1:
 								self.regretchance+=1
 							else:
 								self.regretButton['state']=NORMAL
+							# 拷贝3 <- 拷贝2，拷贝3保存上上上一次棋局
 							self.last_3_positions=copy.deepcopy(self.last_2_positions)
+							# 拷贝2 <- 拷贝1，拷贝2保存上上一次棋局
 							self.last_2_positions=copy.deepcopy(self.last_1_positions)
+							# 拷贝1 <- 当前棋局，拷贝3保存上一次棋局
 							self.last_1_positions=copy.deepcopy(self.positions)
-							# 删除上次的标记，重新创建标记
+							# 删除上次的image_added_sign标记，重新创建image_added_sign标记
 							self.canvas_bottom.delete('image_added_sign')
+							# 创建椭圆对象标记当前下棋点
 							self.image_added_sign=self.canvas_bottom.create_oval(event.x-dx+round(dx/self.dd)*self.dd+0.5*self.dd, event.y-dy+round(dy/self.dd)*self.dd+0.5*self.dd,event.x-dx+round(dx/self.dd)*self.dd-0.5*self.dd, event.y-dy+round(dy/self.dd)*self.dd-0.5*self.dd,width=3,outline='#3ae')
+							# 给椭圆对象添加image和image_added_sign标记
 							self.canvas_bottom.addtag_withtag('image',self.image_added_sign)
 							self.canvas_bottom.addtag_withtag('image_added_sign',self.image_added_sign)
+							# 在界面右侧更新当前棋子颜色提示图
 							if self.present==0:
 								self.create_pW()
 								self.del_pB()
@@ -293,20 +303,25 @@ class Application(Tk):
 								self.del_pW()
 								self.present=0
 						else:
-							# 不属于杀死对方或有气，则判断为无气，警告并弹出警告框
+							# 不属于杀死对方且不属于有气，则判断为无气，警告并弹出警告框
 							self.positions[y][x]=0
+							# 删除图片
 							self.canvas_bottom.delete('position'+str(x)+str(y))
+							# 提示音警告，窗口警告
 							self.bell()
-							self.showwarningbox('无气',"你被包围了！")
+							self.showwarningbox('无气',"您被包围了！")
 					else:
 						# 重复棋局，警告打劫
+						# 将该棋子删除
 						self.positions[y][x]=0
 						self.canvas_bottom.delete('position'+str(x)+str(y))
+						# 恢复原本杀死的棋子
 						self.recover(deadlist,(1 if self.present==0 else 0))
+						# 提示音警告，窗口警告
 						self.bell()
 						self.showwarningbox("打劫","此路不通！")
 				else:
-					# 覆盖，声音警告
+					# 该位置已有棋子，声音警告
 					self.bell()
 			else:
 				# 超出边界，声音警告
@@ -365,9 +380,11 @@ class Application(Tk):
 				deadList+=copy.deepcopy(midvar)
 		return deadList
 	
-	# 警告消息框，接受标题和警告信息			
 	def showwarningbox(self,title,message):
+		'''警告消息框，接受标题和警告信息'''
+		# 不显示预落棋位置
 		self.canvas_bottom.delete(self.cross)
+		# 报警
 		tkinter.messagebox.showwarning(title,message)
 	
 	def get_deadlist(self,x,y):
@@ -408,25 +425,32 @@ class Application(Tk):
 				self.positions[killList[i][1]][killList[i][0]]=0
 				# 删除图片
 				self.canvas_bottom.delete('position'+str(killList[i][0])+str(killList[i][1]))
-
-	# 键盘快捷键退出游戏
+	
 	def keyboardQuit(self,event):
+		'''键盘快捷键退出游戏'''
 		self.quit()
-	# 以下两个函数修改全局变量值，newApp使主函数循环，以建立不同参数的对象
+	
 	def newGame1(self):
+		'''修改全局变量值，newApp使主函数循环，以建立不同参数的对象'''
 		global mode_num,newApp
+		# 9路改成13路
 		mode_num=(13 if self.mode_num==9 else 9)
 		newApp=True
 		self.quit()
+	
 	def newGame2(self):
+		'''修改全局变量值，newApp使主函数循环，以建立不同参数的对象'''
 		global mode_num,newApp
+		#19路改成13路
 		mode_num=(13 if self.mode_num==19 else 19)
 		newApp=True
 		self.quit()
 
 # 声明全局变量，用于新建Application对象时切换成不同模式的游戏
 global mode_num,newApp
+# 棋的路数
 mode_num=9
+# 是否重新开一局
 newApp=False
 
 if __name__=='__main__':
