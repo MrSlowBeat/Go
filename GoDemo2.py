@@ -268,6 +268,7 @@ class Application(Tk):
 					self.kill(deadlist)
 					# 判断是否重复棋局（即是否存在打劫现象）
 					if not self.last_2_positions==self.positions:
+						# 如果没有打劫现象
 						# 判断是否属于有气和杀死对方其中之一
 						if len(deadlist)>0 or self.if_dead([[x,y]],self.present+1,[x,y])==False:
 							# 当不重复棋局，且属于有气和杀死对方其中之一时，落下棋子有效
