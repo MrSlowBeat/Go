@@ -23,7 +23,7 @@ class Application(Tk):
 		self.dd=360*self.size/(self.mode_num-1)
 		# 相对九路棋盘的矫正比例
 		self.p=1 if self.mode_num==9 else (2/3 if self.mode_num==13 else 4/9)
-		# 定义棋盘阵列,超过边界：-1，无子：0，黑棋：1，白棋：2
+		# 定义棋盘阵列,超过边界：-1，无子：0，黑棋：1，白棋：2，[行，列]
 		self.positions=[[0 for i in range(self.mode_num+2)] for i in range(self.mode_num+2)]
 		# 初始化棋盘，所有超过边界的值置-1
 		for m in range(self.mode_num+2):
@@ -49,7 +49,7 @@ class Application(Tk):
 		self.photoWD=PhotoImage(file = "./Pictures/"+"WD"+"-"+str(self.mode_num)+".png")
 		self.photoBU=PhotoImage(file = "./Pictures/"+"BU"+"-"+str(self.mode_num)+".png")
 		self.photoWU=PhotoImage(file = "./Pictures/"+"WU"+"-"+str(self.mode_num)+".png")
-		# 用于黑白棋子图片切换的列表，U代表未下棋，D代表已下棋
+		# 用于黑白棋子图片切换的列表，U代表待落下的棋子，D代表已经落下的棋子
 		self.photoWBU_list=[self.photoBU,self.photoWU]
 		self.photoWBD_list=[self.photoBD,self.photoWD]
 		# 窗口大小
@@ -75,7 +75,7 @@ class Application(Tk):
 		self.newGameButton2.place(x=480*self.size,y=325*self.size)
 		self.quitButton=Button(self,text='退出游戏',command=self.quit)
 		self.quitButton.place(x=480*self.size,y=350*self.size)
-		# 画棋盘，填充颜色，参数（左上角x，左上角y，右下角，右下角y，填充颜色）
+		# 画棋盘，填充颜色，参数（左上角x，左上角y，右下角，右下角y，填充颜色），其中x对应棋盘的列，y对应棋盘的行
 		self.canvas_bottom.create_rectangle(0*self.size,0*self.size,400*self.size,400*self.size,fill='#c51')
 		# 刻画棋盘线及九个点
 		# 先画外框粗线
@@ -91,7 +91,7 @@ class Application(Tk):
 		for i in range(1,self.mode_num-1):
 			self.canvas_bottom.create_line(20*self.size,20*self.size+i*self.dd,380*self.size,20*self.size+i*self.dd,width=2)
 			self.canvas_bottom.create_line(20*self.size+i*self.dd,20*self.size,20*self.size+i*self.dd,380*self.size,width=2)
-		# 放置右侧初始图片
+		# 放置右侧初始图片(太极图)
 		self.pW=self.canvas_bottom.create_image(500*self.size+11, 65*self.size,image=self.photoW)
 		self.pB=self.canvas_bottom.create_image(500*self.size-11, 65*self.size,image=self.photoB)
 		# 每张图片都添加image标签，方便reload函数删除图片
@@ -127,9 +127,13 @@ class Application(Tk):
 		else:
 			self.regretButton['state']=NORMAL
 		# 拷贝棋盘状态，记录前三次棋局
+		# 拷贝3 <- 拷贝2，拷贝3保存上上上一次棋局
 		self.last_3_positions=copy.deepcopy(self.last_2_positions)
+		# 拷贝2 <- 拷贝1，拷贝2保存上上一次棋局
 		self.last_2_positions=copy.deepcopy(self.last_1_positions)
+		# 拷贝1 <- 原棋盘，拷贝1保存上一次棋局
 		self.last_1_positions=copy.deepcopy(self.positions)
+		# 删除image_added_sign
 		self.canvas_bottom.delete('image_added_sign')
 		# 轮到下一玩家
 		if self.present==0:
@@ -142,7 +146,11 @@ class Application(Tk):
 			self.present=0
 	
 	def regret(self):
-		'''悔棋函数，可悔棋一回合，下两回合不可悔棋'''
+		'''
+		悔棋函数，可悔棋一回合，下两回合不可悔棋
+		使用拷贝3恢复上一回合棋局，原棋局变为上一棋局
+		恢复完毕后，将上一棋局保存到拷贝1中，清除拷贝2,3
+		'''
 		# 判定是否可以悔棋，以前第三盘棋局复原棋盘
 		if self.regretchance==1:
 			self.regretchance=0
@@ -158,7 +166,7 @@ class Application(Tk):
 			for m in range(1,self.mode_num+1):
 				for n in range(1,self.mode_num+1):
 					self.positions[m][n]=0
-			#使用棋盘拷贝3进行记录
+			# 使用棋盘拷贝3进行记录
 			for m in range(len(self.last_3_positions)):
 				for n in range(len(self.last_3_positions[m])):
 					# 记录黑白棋子的[列,行]值
@@ -166,41 +174,57 @@ class Application(Tk):
 						list_of_b+=[[n,m]]
 					elif self.last_3_positions[m][n]==2:
 						list_of_w+=[[n,m]]
+			# 恢复所有白棋子和黑棋子的位置和对应图片
 			self.recover(list_of_b,0)
 			self.recover(list_of_w,1)
+			# 拷贝1 <- 拷贝3
 			self.last_1_positions=copy.deepcopy(self.last_3_positions)
+			# 将拷贝2,3清空
 			for m in range(1,self.mode_num+1):
 				for n in range(1,self.mode_num+1):
 					self.last_2_positions[m][n]=0
 					self.last_3_positions[m][n]=0
 	
-	# 重新加载函数,删除图片，序列归零，设置一些初始参数，点击“重新开始”时调用
 	def reload(self):
+		'''重新加载函数,删除图片，序列归零，设置一些初始参数，点击“重新开始”时调用'''
+		# 停止游戏
 		if self.stop==1:
 			self.stop=0
+		# 删除所有图片
 		self.canvas_bottom.delete('image')
+		# 清除后悔标志
 		self.regretchance=0
+		# 当前玩家重置为黑子
 		self.present=0
 		self.create_pB()
+		# 重置棋盘和其相应的拷贝
 		for m in range(1,self.mode_num+1):
 			for n in range(1,self.mode_num+1):
 				self.positions[m][n]=0
 				self.last_3_positions[m][n]=0
 				self.last_2_positions[m][n]=0
 				self.last_1_positions[m][n]=0
-	# 以下四个函数实现了右侧太极图的动态创建与删除
+	
 	def create_pW(self):
+		'''太极图白色区域的创建'''
 		self.pW=self.canvas_bottom.create_image(500*self.size+11, 65*self.size,image=self.photoW)
 		self.canvas_bottom.addtag_withtag('image',self.pW)
+	
 	def create_pB(self):
+		'''太极图黑色区域的创建'''
 		self.pB=self.canvas_bottom.create_image(500*self.size-11, 65*self.size,image=self.photoB)
 		self.canvas_bottom.addtag_withtag('image',self.pB)
+	
 	def del_pW(self):
+		'''太极图白色区域的删除'''
 		self.canvas_bottom.delete(self.pW)
+	
 	def del_pB(self):
+		'''太极图黑色区域的删除'''
 		self.canvas_bottom.delete(self.pB)
-	# 显示鼠标移动下棋子的移动
+	
 	def shadow(self,event):
+		'''显示鼠标移动下棋子的移动'''
 		if not self.stop:
 			# 找到最近格点，在当前位置靠近的格点出显示棋子图片，并删除上一位置的棋子图片
 			if (20*self.size<event.x<380*self.size) and (20*self.size<event.y<380*self.size):
@@ -336,9 +360,13 @@ class Application(Tk):
 		if len(list_to_recover)>0:
 			for i in range(len(list_to_recover)):
 				self.positions[list_to_recover[i][1]][list_to_recover[i][0]]=b_or_w+1
+				# 添加落下棋子的图片
 				self.image_added=self.canvas_bottom.create_image(20*self.size+(list_to_recover[i][0]-1)*self.dd+4*self.p, 20*self.size+(list_to_recover[i][1]-1)*self.dd-5*self.p,image=self.photoWBD_list[b_or_w])
+				# 为落下棋子图片添加image标签
 				self.canvas_bottom.addtag_withtag('image',self.image_added)
+				# 为落下棋子图片添加position[列,行]标签
 				self.canvas_bottom.addtag_withtag('position'+str(list_to_recover[i][0])+str(list_to_recover[i][1]),self.image_added)
+	
 	# 杀死位置列表killList中的棋子，即删除图片，位置值置0
 	def kill(self,killList):
 		if len(killList)>0:
