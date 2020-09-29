@@ -228,29 +228,39 @@ class Application(Tk):
 		if not self.stop:
 			# 找到最近格点，在当前位置靠近的格点出显示棋子图片，并删除上一位置的棋子图片
 			if (20*self.size<event.x<380*self.size) and (20*self.size<event.y<380*self.size):
-				dx=(event.x-20*self.size)%self.dd
-				dy=(event.y-20*self.size)%self.dd
+				dx=(event.x-20*self.size)%self.dd # 鼠标x位置对边长求模的余数
+				dy=(event.y-20*self.size)%self.dd # 鼠标y位置对边长求模的余数
+				# 计算出预落棋位置，并创建棋子图片
 				self.cross=self.canvas_bottom.create_image(event.x-dx+round(dx/self.dd)*self.dd+22*self.p, event.y-dy+round(dy/self.dd)*self.dd-27*self.p,image=self.photoWBU_list[self.present])
+				# 给图片添加image标签
 				self.canvas_bottom.addtag_withtag('image',self.cross)
+				# 若上一个预落棋图片不为空，则将其清除
 				if self.cross_last!=None:
 					self.canvas_bottom.delete(self.cross_last)
+				# 将当前预落棋图片设为上一个预落棋图片
 				self.cross_last=self.cross
-	# 落子，并驱动玩家的轮流下棋行为
+	
 	def getDown(self,event):
+		'''落子，并驱动玩家的轮流下棋行为'''
 		if not self.stop:
 			# 先找到最近格点
 			if (20*self.size-self.dd*0.4<event.x<self.dd*0.4+380*self.size) and (20*self.size-self.dd*0.4<event.y<self.dd*0.4+380*self.size):
+				# 鼠标x位置对边长求模的余数
 				dx=(event.x-20*self.size)%self.dd
+				# 鼠标y位置对边长求模的余数
 				dy=(event.y-20*self.size)%self.dd
+				# 求出最近格点位置
 				x=int((event.x-20*self.size-dx)/self.dd+round(dx/self.dd)+1)
 				y=int((event.y-20*self.size-dy)/self.dd+round(dy/self.dd)+1)
 				# 判断位置是否已经被占据
 				if self.positions[y][x]==0:
-					# 未被占据，则尝试占据，获得占据后能杀死的棋子列表
+					# 若未被占据，则尝试占据，获得占据后能杀死的棋子列表
 					self.positions[y][x]=self.present+1
+					# 创建棋子落下的图片
 					self.image_added=self.canvas_bottom.create_image(event.x-dx+round(dx/self.dd)*self.dd+4*self.p, event.y-dy+round(dy/self.dd)*self.dd-5*self.p,image=self.photoWBD_list[self.present])
+					# 为图片添加image标签
 					self.canvas_bottom.addtag_withtag('image',self.image_added)
-					# 棋子与位置标签绑定，方便“杀死”
+					# 棋子与位置标签position[x,y]绑定，方便“杀死”
 					self.canvas_bottom.addtag_withtag('position'+str(x)+str(y),self.image_added)
 					deadlist=self.get_deadlist(x,y)
 					self.kill(deadlist)
@@ -298,13 +308,14 @@ class Application(Tk):
 			else:
 				# 超出边界，声音警告
 				self.bell()
-	# 判断棋子（种类为yourChessman，位置为yourPosition）是否无气（死亡），有气则返回False，无气则返回无气棋子的列表
-	# 本函数是游戏规则的关键，初始deadlist只包含了自己的位置，每次执行时，函数尝试寻找yourPosition周围有没有空的位置，有则结束，返回False代表有气；
-	# 若找不到，则找自己四周的同类（不在deadlist中的）是否有气，即调用本函数，无气，则把该同类加入到deadlist，然后找下一个邻居，只要有一个有气，返回False代表有气；
-	# 若四周没有一个有气的同类，返回deadlist,至此结束递归
-	# def if_dead(self,deadlist,yourChessman,yourPosition):
-
+	
 	def if_dead(self,deadList,yourChessman,yourPosition):
+		'''
+		判断棋子（种类为yourChessman，位置为yourPosition）是否无气（死亡），有气则返回False，无气则返回无气棋子的列表
+		本函数是游戏规则的关键，初始deadlist只包含了自己的位置，每次执行时，函数尝试寻找yourPosition周围有没有空的位置，有则结束，返回False代表有气；
+		若找不到，则找自己四周的同类（不在deadlist中的）是否有气，即调用本函数，无气，则把该同类加入到deadlist，然后找下一个邻居，只要有一个有气，返回False代表有气；
+		若四周没有一个有气的同类，返回deadlist,至此结束递归
+		'''
 		for i in [-1,1]:
 			if [yourPosition[0]+i,yourPosition[1]] not in deadList:
 				if self.positions[yourPosition[1]][yourPosition[0]+i]==0:
@@ -341,10 +352,12 @@ class Application(Tk):
 	def showwarningbox(self,title,message):
 		self.canvas_bottom.delete(self.cross)
 		tkinter.messagebox.showwarning(title,message)
-	# 落子后，依次判断四周是否有棋子被杀死，并返回死棋位置列表
+	
 	def get_deadlist(self,x,y):
+		'''落子后，依次判断四周是否有棋子被杀死，并返回死棋位置列表'''
 		deadlist=[]
 		for i in [-1,1]:
+			# 若周围是对手的棋子且没在死亡的名单里
 			if self.positions[y][x+i]==(2 if self.present==0 else 1) and ([x+i,y] not in deadlist):
 				killList=self.if_dead([[x+i,y]],(2 if self.present==0 else 1),[x+i,y])
 				if not killList==False:
@@ -364,7 +377,7 @@ class Application(Tk):
 				self.image_added=self.canvas_bottom.create_image(20*self.size+(list_to_recover[i][0]-1)*self.dd+4*self.p, 20*self.size+(list_to_recover[i][1]-1)*self.dd-5*self.p,image=self.photoWBD_list[b_or_w])
 				# 为落下棋子图片添加image标签
 				self.canvas_bottom.addtag_withtag('image',self.image_added)
-				# 为落下棋子图片添加position[列,行]标签
+				# 为落下棋子图片添加position[x,y]（列，行）标签
 				self.canvas_bottom.addtag_withtag('position'+str(list_to_recover[i][0])+str(list_to_recover[i][1]),self.image_added)
 	
 	# 杀死位置列表killList中的棋子，即删除图片，位置值置0
@@ -391,7 +404,8 @@ class Application(Tk):
 # 声明全局变量，用于新建Application对象时切换成不同模式的游戏
 global mode_num,newApp
 mode_num=9
-newApp=False	
+newApp=False
+
 if __name__=='__main__':
 	# 循环，直到不切换游戏模式
 	while True:
