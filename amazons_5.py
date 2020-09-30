@@ -7,7 +7,7 @@ from Game import AbstractArgs, AbstractGame
 
 class Args(AbstractArgs):
     """
-    Parameters class
+    参数类
     """
     def __init__(self):
         super().__init__()
@@ -61,7 +61,7 @@ class Args(AbstractArgs):
 
 class Game(AbstractGame):
     """
-    Game rules' class
+    游戏规则类
     """
     def __init__(self, args):
         super().__init__()
@@ -90,9 +90,10 @@ class Game(AbstractGame):
 
     def init_board(self):
         """
-        Checkerboard initialization, which defines the initial chessboard and the first player
+        棋盘初始化，定义初始棋盘和第一个玩家
 
-        :return board:(numpy) One dimensional numpy array
+        输出
+        (numpy)棋盘，一维numpy数组
         """
         board_size = self.board_size
         self.player = self.WHITE
@@ -109,59 +110,18 @@ class Game(AbstractGame):
         self.board[board_size - 1][2 * board_size // 3] = self.WHITE
         return self.board.reshape((-1,))
 
-    def play_one_game(self, proc, num_iter, mcts):
-        """
-        Play a complete game of chess
-
-        :param proc:(int) process number, -1 represents a single process
-        :param num_iter:(int) the number of iterations
-        :param mcts:(object) Monte Carlo tree search object
-        :returns player: (int) the loser
-                 return_data: (list) training data sampled by MCTs
-                 trajectory: (list) the real trajectory of a game
-        """
-        return_data, trajectory = [], []
-        board = self.init_board()
-        player = self.player
-        z = 0
-        play_step = 0
-        while z == 0:
-            ts = time.time()
-            if proc == self.args.SingleProcess or proc == self.args.print_log_process:
-                Log.print_step_num(play_step)
-                Log.print_board(board.reshape(self.board_size, self.board_size))
-            # Unified use of white chess pieces to search and simulate
-            transformed_board = self.change_perspectives(board, player)
-            if (3 * play_step) >= self.args.search_layers_threshold:
-                next_action, data, trajectory_data = mcts.select_action(proc, transformed_board, num_iter, 3 * play_step, "sharpening policy")
-            elif (3 * play_step) < (self.args.search_layers_threshold - self.args.smooth_policy_window):
-                next_action, data, trajectory_data = mcts.select_action(proc, transformed_board, num_iter, 3 * play_step, "normal policy")
-            else:
-                next_action, data, trajectory_data = mcts.select_action(proc, transformed_board, num_iter, 3 * play_step, "smoothing policy")
-                # print("smoothing policy")
-            return_data.extend(data)
-            trajectory.extend(trajectory_data)
-            te = time.time()
-            if proc == self.args.SingleProcess or proc == self.args.print_log_process:
-                Log.print_action_and_search_time(proc, player, next_action, ts, te)
-            board, player = self.get_next_state(board, player, next_action)
-            z = self.game_over(board, player)
-            play_step += 1
-            if z == self.GAME_END:
-                if proc == self.args.SingleProcess or proc == self.args.print_log_process:
-                    Log.print_game_result(player)
-                    Log.print_board(board.reshape(self.board_size, self.board_size))
-                return player, return_data, trajectory
 
     def get_next_state(self, board, player, action):
         """
-        Three steps for a real move, convert to the next chessboard according to the current chessboard and action
+        一个真实步的三步，根据当前棋盘和动作转换到下一个棋盘
 
-        :param board:(numpy) the current chessboard
-        :param player:(int) the current player
-        :param action:(int) the next move
-        :returns board:(numpy)  the converted chessboard
-                 player:(int) next player
+        输入
+        board:(numpy) 目前的棋盘状态
+        player:(int) 目前的玩家
+        action:(int) 执行的动作
+        输出
+        board:(numpy) 下一个棋盘
+        player:(int) 下一个玩家
         """
         assert type(board) is np.ndarray
         assert board.shape == self.board1d_shape
@@ -180,12 +140,14 @@ class Game(AbstractGame):
 
     def get_legal_action(self, board, layers, start_pos=None):
         """
-        According to the current board and game rules to obtain legal actions
+        根据当前的棋盘和游戏规则来获取合法的动作
 
-        :param board:(numpy) the current board
-        :param layers:(int) depth of the mcts tree
-        :param start_pos:(int) Starting point of action
-        return legal actions:(list) All movable points
+        输入
+        board:(numpy) 当前棋盘
+        layers:(int) MCTs的深度
+        start_pos:(int) 执行动作的起始位置
+        输出
+        legal actions:(list) 所有可移动到的位置
         """
         types = self.types[layers % 3]
         if types == "queen":
@@ -251,11 +213,13 @@ class Game(AbstractGame):
 
     def game_over(self, board, player):
         """
-        Judge whether the game is over
+        判断游戏是否结束
 
-        :param board:(numpy) the current board
-        :param player:(int) the current player
-        :return game_state:(int) 0/-1  The game is not over/The game is over
+        输入
+        board:(numpy) 当前棋盘
+        player:(int) 当前玩家
+        输出
+        game_state:(int) 0/-1  游戏没有结束/游戏结束
         """
         assert type(board) is np.ndarray
         assert board.shape == self.board1d_shape
@@ -266,142 +230,3 @@ class Game(AbstractGame):
                 if board[moves[0]] == self.EMPTY:
                     return 0
         return self.GAME_END
-
-    def change_perspectives(self, board, player):
-        """
-        Change the perspective when playing black chess (because the neural network always uses the perspective of white chess training)
-
-        :param board:(numpy) the current board
-        :param player:(int) the current player
-        :return board:(numpy) converted board
-        """
-        if player == self.WHITE:
-            return board
-
-        b = np.copy(board)
-        for i in range(self.action_size):
-            if b[i] == self.WHITE or b[i] == self.BLACK:
-                b[i] = -b[i]
-        return b
-
-    def to_string(self, board):
-        """
-        Convert chessboard to string
-
-        :param board:(numpy) the current board
-        :return string:(str) string corresponding to chessboard
-        """
-        return board.tostring()
-
-    def board_flip(self, board, pi, pos=None):
-        """
-        Make the chessboard diagonally and flip it symmetrically to increase the amount of data
-
-        :param board:(numpy) the current board
-        :param pi:(list) posterior policy
-        :param pos:(int) selected move
-        :return board_list:(list) list data after flipped in four directions
-        """
-        board.shape = self.board2d_shape
-        board_list = []
-        new_pos = None
-        # 1
-        new_b = np.reshape(board, self.board2d_shape)
-        pi_ = np.reshape(pi, self.board2d_shape)
-        if pos is None:
-            board_list += [(new_b, list(pi_.ravel()))]
-        else:
-            new_pos = np.zeros_like(pi_)
-            new_pos[pos // self.board_size][pos % self.board_size] = 1
-            board_list += [(new_b, new_pos, list(pi_.ravel()))]
-        # 2
-        new_b = np.fliplr(new_b)
-        new_pi = np.fliplr(pi_)
-        if pos is None:
-            board_list += [(new_b, list(new_pi.ravel()))]
-        else:
-            new_pos = np.fliplr(new_pos)
-            board_list += [(new_b, new_pos, list(new_pi.ravel()))]
-        # 3
-        new_b = np.flipud(new_b)
-        new_pi = np.flipud(new_pi)
-        if pos is None:
-            board_list += [(new_b, list(new_pi.ravel()))]
-        else:
-            new_pos = np.flipud(new_pos)
-            board_list += [(new_b, new_pos, list(new_pi.ravel()))]
-        # 4
-        new_b = np.fliplr(new_b)
-        new_pi = np.fliplr(new_pi)
-        if pos is None:
-            board_list += [(new_b, list(new_pi.ravel()))]
-        else:
-            new_pos = np.fliplr(new_pos)
-            board_list += [(new_b, new_pos, list(new_pi.ravel()))]
-
-        board.shape = self.board1d_shape
-        return board_list
-
-    def init_pre_table(self):
-        """
-        Initialize the information table according to the rules of the game
-        """
-        # Converting 1-D coordinates to 2-D coordinates
-        xy_of = np.array([(i, j) for i in range(self.board_size) for j in range(self.board_size)], dtype=np.int)
-
-        # 8 directions
-        delta_1d = np.array((-self.board_size - 1, -self.board_size, -self.board_size + 1,
-                             -1, +1,
-                             +self.board_size - 1, +self.board_size, +self.board_size + 1),
-                            dtype=np.int)
-
-        delta_2d = np.array(((-1, -1), (-1, 0), (-1, +1),
-                             (0, -1), (0, +1),
-                             (+1, -1), (+1, 0), (+1, +1)),
-                            dtype=np.int)
-
-        # Define the predication table (by direction, the empty table is removed)
-        self.all_moves = [[] for _ in range(self.action_size)]
-
-        for s in range(self.action_size):
-            for d in range(self.N_DIR):
-                move_list = []
-                for i in range(self.board_size):
-                    cur_x, cur_y = xy_of[s] + delta_2d[d] * (i + 1)
-                    cur = s + delta_1d[d] * (i + 1)
-                    if cur_x not in range(self.board_size) or cur_y not in range(self.board_size):
-                        break
-                    move_list.append(cur)
-
-                if move_list:
-                    self.all_moves[s].append(tuple(move_list))
-        self.all_moves = tuple(self.all_moves)
-
-    def get_next_board(self, board, next_a, layers, start_a=None):
-        """
-        Each small step transition (will produce a non real state board)
-
-        :param board:(numpy) the current board
-        :param next_a:(int) putting point
-        :param layers:(int) the depth of mcts tree
-        :param start_a:(int) start point
-        :return b:(numpy) converted chessboard
-        """
-        assert type(board) is np.ndarray
-        assert board.shape == self.board1d_shape
-        if self.types[layers % 3] == "queen":
-            board = board.copy()
-            return board
-        elif self.types[layers % 3] == "next":
-            b = board.copy()
-            assert b[start_a] == self.WHITE
-            b[start_a] = self.EMPTY
-            assert b[next_a] == self.EMPTY
-            b[next_a] = self.WHITE
-            return b
-        else:
-            b = board.copy()
-            assert b[next_a] == self.EMPTY
-            b[next_a] = self.ARROW
-            b = self.change_perspectives(b, self.BLACK)
-            return b
