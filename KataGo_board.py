@@ -11,7 +11,7 @@ class Board:
 
   ZOBRIST_STONE = [[],[],[],[]]
   ZOBRIST_PLA = []
-
+  # 用64个随机位生成1个长整型
   ZOBRIST_RAND = random.Random()
   ZOBRIST_RAND.seed(123987456)
 
