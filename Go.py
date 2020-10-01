@@ -11,52 +11,52 @@ class Args(AbstractArgs):
     """
     def __init__(self):
         super().__init__()
-        self.board_size = 5
+        self.board_size = 9
         self.action_size = self.board_size ** 2
-        self.num_max_layers = 3 * (self.board_size ** 2 - 8)
-        self.GAME_NAME = 'amazons_5'
-        # Mcts search parameters
-        self.num_iter = 1000
-        self.num_play_game = 20
-        self.train_num_search = 1000
-        self.random_num_search = 300
-        self.sharpening_policy_t = 2
-        self.smoothing_policy_t = 0.7
-        self.smooth_policy_window = 3
-        self.search_layers_threshold = 51
-        self.Cpuct = 5
-        # replay_buffer params
-        self.N_threshold = 50
-        self.N_Q_threshold = 1.5
-        self.replay_decay_rate = 0.3
-        self.replay_buffer_threshold = 5
-        # NetWork params
-        self.load_latest_model = False
-        self.num_net = 3
-        self.lr = 0.001
-        self.lr_iter_threshold = 60
-        self.weight_decay = 0.0001
-        self.epochs = 10
-        self.batch_size = 64
-        self.num_params = 0
-        # Process
-        self.multiprocess = False
-        self.num_process = 4
-        self.SingleProcess = -1
-        self.print_log_process = 0
-        # Gpu Parallel
-        self.cuda = torch.cuda.is_available()
-        self.gpu_parallel = False
-        self.gpu_num = torch.cuda.device_count()
-        self.gpu_ids = range(0, torch.cuda.device_count(), 1)
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.EPS = 1e-10
-        # old and new networks PK
-        self.Pk = False
-        self.update_iter_threshold = 0.5
-        self.num_pk = 10
-        self.pk_step_threshold = 3
-        self.start_pk_iter_threshold = 20
+        # self.num_max_layers = 3 * (self.board_size ** 2 - 8)
+        self.GAME_NAME = 'Go'
+        # # Mcts search parameters
+        # self.num_iter = 1000
+        # self.num_play_game = 20
+        # self.train_num_search = 1000
+        # self.random_num_search = 300
+        # self.sharpening_policy_t = 2
+        # self.smoothing_policy_t = 0.7
+        # self.smooth_policy_window = 3
+        # self.search_layers_threshold = 51
+        # self.Cpuct = 5
+        # # replay_buffer params
+        # self.N_threshold = 50
+        # self.N_Q_threshold = 1.5
+        # self.replay_decay_rate = 0.3
+        # self.replay_buffer_threshold = 5
+        # # NetWork params
+        # self.load_latest_model = False
+        # self.num_net = 3
+        # self.lr = 0.001
+        # self.lr_iter_threshold = 60
+        # self.weight_decay = 0.0001
+        # self.epochs = 10
+        # self.batch_size = 64
+        # self.num_params = 0
+        # # Process
+        # self.multiprocess = False
+        # self.num_process = 4
+        # self.SingleProcess = -1
+        # self.print_log_process = 0
+        # # Gpu Parallel
+        # self.cuda = torch.cuda.is_available()
+        # self.gpu_parallel = False
+        # self.gpu_num = torch.cuda.device_count()
+        # self.gpu_ids = range(0, torch.cuda.device_count(), 1)
+        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # self.EPS = 1e-10
+        # # old and new networks PK
+        # self.Pk = False
+        # self.update_iter_threshold = 0.5
+        # self.num_pk = 10
+        # self.pk_step_threshold = 3
+        # self.start_pk_iter_threshold = 20
 
 
 class Game(AbstractGame):
@@ -66,54 +66,58 @@ class Game(AbstractGame):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.BLACK = -2
+        self.BLACK = 1
         self.WHITE = 2
         self.EMPTY = 0
-        self.ARROW = 1
+        self.OUT = -1
         self.GAME_END = -1
-        self.directions = [(1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1)]
+        # self.directions = [(1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1)]
         self.board_size = args.board_size
-        self.step = [0, 1, 2]
+        # self.step = [0, 1, 2]
+        # 合法的位置
         self.legal_pos = dict()
         self.action_size = args.board_size ** 2
-        self.Cpuct = args.Cpuct
-        self.N_DIR = 8
+        # self.Cpuct = args.Cpuct
+        # self.N_DIR = 8
+        # 棋盘的二维形状
         self.board2d_shape = (self.board_size, self.board_size)
+        # 棋盘的一维形状
         self.board1d_shape = (self.action_size, )
         self.types = tuple(("queen", "next", "arrow"))
         self.flag = {"queen": 1, "next": 1, "arrow": -1}
         self.player = None
         self.board = None
+        self.last_1_board = None
+        self.last_2_board = None
+        self.last_3_board = None
         self.init_board()
         self.all_moves = None
-        self.init_pre_table()
+        # self.init_pre_table()
 
     def init_board(self):
         """
-        棋盘初始化，定义初始棋盘和第一个玩家
+        棋盘初始化，定义初始棋盘和第一个玩家(白棋)
 
         输出
         (numpy)棋盘，一维numpy数组
         """
         board_size = self.board_size
-        self.player = self.WHITE
-        self.board = np.zeros((board_size, board_size), dtype="int32")
-        # BLACK
-        self.board[0][board_size // 3] = self.BLACK
-        self.board[0][2 * board_size // 3] = self.BLACK
-        self.board[board_size // 3][0] = self.BLACK
-        self.board[board_size // 3][board_size - 1] = self.BLACK
-        # WHITE
-        self.board[2 * board_size // 3][0] = self.WHITE
-        self.board[2 * board_size // 3][board_size - 1] = self.WHITE
-        self.board[board_size - 1][board_size // 3] = self.WHITE
-        self.board[board_size - 1][2 * board_size // 3] = self.WHITE
+        self.player = self.BLACK
+        self.board = np.zeros((board_size+2, board_size+2), dtype="int32")
+        # 初始化超出边界的点
+        for m in range(board_size+2):
+            for n in range(board_size+2):
+                if (m*n==0 or m==board_size+1 or n==board_size+1):
+                    self.board[m][n]=self.OUT
+        self.last_1_board = self.board.copy()
+        self.last_2_board = self.board.copy()
+        self.last_3_board = self.board.copy()
         return self.board.reshape((-1,))
 
 
     def get_next_state(self, board, player, action):
         """
-        一个真实步的三步，根据当前棋盘和动作转换到下一个棋盘
+        根据当前棋盘和所选择的动作转换到下一个棋盘
 
         输入
         board:(numpy) 目前的棋盘状态
