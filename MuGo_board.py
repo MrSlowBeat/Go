@@ -1,29 +1,35 @@
 '''
-A board is a NxN numpy array.
-A Coordinate is a tuple index into the board.
-A Move is a (Coordinate c | None).
-A PlayerMove is a (Color, Move) tuple
+该程序为MuGo（一个轻量级AlphaGo的复现）的棋盘定义和规则实现的python源程序
 
-(0, 0) is considered to be the upper left corner of the board, and (18, 0) is the lower left.
+A board（棋盘） is a N x N numpy array.
+A Coordinate（坐标） is a tuple index into the board.
+A Move（移动） is a (Coordinate c | None).
+A PlayerMove（玩家的移动） is a (Color, Move) tuple
+
+(0, 0) 为棋盘的左上角, and (18, 0) 为棋盘的左下角
 '''
+
 from collections import namedtuple
 import copy
 import itertools
 
 import numpy as np
 
-# Represent a board as a numpy array, with 0 empty, 1 is black, -1 is white.
-# This means that swapping colors is as simple as multiplying array by -1.
+# 用numpy array表示一个棋盘, 0是空, 1是黑, -1是白
+# 这意味着交换颜色将数组乘以-1即可
 WHITE, EMPTY, BLACK, FILL, KO, UNKNOWN = range(-1, 5)
 
-class PlayerMove(namedtuple('PlayerMove', ['color', 'move'])): pass
+class PlayerMove(namedtuple('PlayerMove', ['color', 'move'])):
+    pass
 
-# Represents "group not found" in the LibertyTracker object
+# 表示LibertyTracker对象中的“未找到组”
 MISSING_GROUP_ID = -1
 
-class IllegalMove(Exception): pass
+class IllegalMove(Exception):
+    '''非法的移动'''
+    pass
 
-# these are initialized by set_board_size
+# 这些变量由set_board_size函数初始化
 N = None
 ALL_COORDS = []
 EMPTY_BOARD = None
@@ -32,25 +38,41 @@ DIAGONALS = {}
 
 def set_board_size(n):
     '''
-    Hopefully nobody tries to run both 9x9 and 19x19 game instances at once.
-    Also, never do "from go import N, W, ALL_COORDS, EMPTY_BOARD".
+    初始化棋盘函数
+    --------------------
+    希望没有人同时运行9*9和19*19的游戏实例
+    另外，永远也不要使用语句"from go import N, W, ALL_COORDS, EMPTY_BOARD"
     '''
     global N, ALL_COORDS, EMPTY_BOARD, NEIGHBORS, DIAGONALS
-    if N == n: return
+    if N == n:
+        return
     N = n
+    #所有的坐标
     ALL_COORDS = [(i, j) for i in range(n) for j in range(n)]
+    #空白棋盘
     EMPTY_BOARD = np.zeros([n, n], dtype=np.int8)
-    def check_bounds(c):
-        return c[0] % n == c[0] and c[1] % n == c[1]
 
+    def check_bounds(c):
+        '''检查是否超出边界，没有则返回1，否则返回0'''
+        return c[0] % n == c[0] and c[1] % n == c[1]
+    
+    #[字典]每个坐标对应的值：邻居坐标，去除超出边界的点
     NEIGHBORS = {(x, y): list(filter(check_bounds, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)])) for x, y in ALL_COORDS}
+    #[字典]每个坐标对应的值：对角线坐标，去除超出边界的点
     DIAGONALS = {(x, y): list(filter(check_bounds, [(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)])) for x, y in ALL_COORDS}
 
 def place_stones(board, color, stones):
+    '''放置棋子'''
     for s in stones:
         board[s] = color
 
 def find_reached(board, c):
+    '''
+    使用带记录的深度优先搜索寻找所有连成一个整体的棋子（称为组），同时找到该组的边界
+    输出：set(该棋子所属的整体),set(边界所有点)
+    ----------------
+    注意set()表示集合，有自动去重的功能
+    '''
     color = board[c]
     chain = set([c])
     reached = set()
@@ -66,81 +88,112 @@ def find_reached(board, c):
     return chain, reached
 
 def is_koish(board, c):
-    'Check if c is surrounded on all sides by 1 color, and return that color'
-    if board[c] != EMPTY: return None
+    '检查c（空点）是否被1个颜色包围，并返回该颜色'
+    # 非空则返回None
+    if board[c] != EMPTY:
+        return None
     neighbors = {board[n] for n in NEIGHBORS[c]}
+    # 周围只有1种颜色，且周围没有空点
     if len(neighbors) == 1 and not EMPTY in neighbors:
         return list(neighbors)[0]
     else:
         return None
 
 def is_eyeish(board, c):
-    'Check if c is an eye, for the purpose of restricting MC rollouts.'
+    '检查c是否为1个眼, 来限制MC rollouts'
     color = is_koish(board, c)
+    # 若该空点周围不是由单颜色包围，则不是眼
     if color is None:
         return None
+    #错误对角
     diagonal_faults = 0
+    #该点的对角
     diagonals = DIAGONALS[c]
     if len(diagonals) < 4:
         diagonal_faults += 1
     for d in diagonals:
+        #如果该对角不是邻居的同颜色或者空
         if not board[d] in (color, EMPTY):
             diagonal_faults += 1
+    #错误对角数>1，则不是眼，返回空
     if diagonal_faults > 1:
         return None
     else:
+        #否则是眼，返回颜色
         return color
 
 class Group(namedtuple('Group', ['id', 'stones', 'liberties', 'color'])):
     '''
-    stones: a set of Coordinates belonging to this group
-    liberties: a set of Coordinates that are empty and adjacent to this group.
-    color: color of this group
+    stones:属于该组的坐标的set集合
+    liberties:和该组邻接且为空点的坐标的set集合
+    color:该组的颜色
     '''
     def __eq__(self, other):
+        '''判断是否是同一个组'''
         return self.stones == other.stones and self.liberties == other.liberties and self.color == other.color
 
 
 class LibertyTracker():
+    '''自由点追踪器'''
+    #静态方法：不使用该类的属性和方法
     @staticmethod
     def from_board(board):
+        #拷贝该棋盘
         board = np.copy(board)
+        #当前组的id
         curr_group_id = 0
+        # 再定义一个自由点跟踪器
         lib_tracker = LibertyTracker()
         for color in (WHITE, BLACK):
+            #当棋盘上还有 黑白 棋子时
             while color in board:
                 curr_group_id += 1
+                #该颜色棋子的索引值
                 found_color = np.where(board == color)
+                #返回第一个该颜色棋子的坐标
                 coord = found_color[0][0], found_color[1][0]
+                #该棋子构成的组和其边界
                 chain, reached = find_reached(board, coord)
+                #找出边界中的自由点
                 liberties = set(r for r in reached if board[r] == EMPTY)
+                #生成组实例
                 new_group = Group(curr_group_id, chain, liberties, color)
+                #将其加入组字典
                 lib_tracker.groups[curr_group_id] = new_group
+                #将该组的id添加到该组所有点的[组索引]坐标上
                 for s in chain:
                     lib_tracker.group_index[s] = curr_group_id
+                #将已经遍历过的棋子标记为FILL
                 place_stones(board, FILL, chain)
 
+        #最大组id
         lib_tracker.max_group_id = curr_group_id
 
+        #棋盘上每个点的自由点数
         liberty_counts = np.zeros([N, N], dtype=np.uint8)
         for group in lib_tracker.groups.values():
+            #该组的自由点数
             num_libs = len(group.liberties)
+            #将该自由点数赋给该组的每个点
             for s in group.stones:
                 liberty_counts[s] = num_libs
+        #自由点缓存
         lib_tracker.liberty_cache = liberty_counts
-
+        #返回该自由点追踪器
         return lib_tracker
 
     def __init__(self, group_index=None, groups=None, liberty_cache=None, max_group_id=1):
-        # group_index: a NxN numpy array of group_ids. -1 means no group
-        # groups: a dict of group_id to groups
-        # liberty_cache: a NxN numpy array of liberty counts
+        '''初始化函数'''
+        # group_index:一个 N x N numpy array of 组id映射图，每个元素为组的id值，-1 表示没有组
+        # groups:一个{组id:组实例}字典
+        # liberty_cache: 一个 N x N numpy array of 自由点映射图（元素为棋盘上每个点的自由点数），0表示没有自由点
         self.group_index = group_index if group_index is not None else -np.ones([N, N], dtype=np.int16)
         self.groups = groups or {}
         self.liberty_cache = liberty_cache if liberty_cache is not None else np.zeros([N, N], dtype=np.uint8)
         self.max_group_id = max_group_id
 
     def __deepcopy__(self, memodict={}):
+        '''深拷贝函数'''
         new_group_index = np.copy(self.group_index)
         new_lib_cache = np.copy(self.liberty_cache)
         new_groups = {
@@ -150,45 +203,70 @@ class LibertyTracker():
         return LibertyTracker(new_group_index, new_groups, liberty_cache=new_lib_cache, max_group_id=self.max_group_id)
 
     def add_stone(self, color, c):
+        '''添加一个子'''
+        #断言该点没有组
         assert self.group_index[c] == MISSING_GROUP_ID
+        #提掉的子集合
         captured_stones = set()
+        #敌人邻接组的id集合
         opponent_neighboring_group_ids = set()
+        #盟友邻接组的id集合
         friendly_neighboring_group_ids = set()
+        #空邻接组的坐标集合
         empty_neighbors = set()
-
+        #对于c的每一个邻接点
         for n in NEIGHBORS[c]:
+            #找到其组id
             neighbor_group_id = self.group_index[n]
+            #非空组
             if neighbor_group_id != MISSING_GROUP_ID:
+                #返回该组
                 neighbor_group = self.groups[neighbor_group_id]
                 if neighbor_group.color == color:
+                    #盟友组
                     friendly_neighboring_group_ids.add(neighbor_group_id)
                 else:
+                    #敌人组
                     opponent_neighboring_group_ids.add(neighbor_group_id)
             else:
+                #空组
                 empty_neighbors.add(n)
-
+        
+        #将该点作为新组添加到groups、group_index、liberty_cache中，empty_neighbors中的坐标作为自由点
         new_group = self._create_group(color, c, empty_neighbors)
 
+        #将每个所有盟友组与该新的组进行合并
         for group_id in friendly_neighboring_group_ids:
             new_group = self._merge_groups(group_id, new_group.id)
 
         for group_id in opponent_neighboring_group_ids:
+            #对于每个敌人组
             neighbor_group = self.groups[group_id]
+            #若改组的自由点数为1
             if len(neighbor_group.liberties) == 1:
+                #提掉该组
                 captured = self._capture_group(group_id)
+                #更新被提子集合
                 captured_stones.update(captured)
             else:
+                #删除1个敌人组的自由点
                 self._update_liberties(group_id, remove={c})
-
+        
+        #增加盟友组自由点
         self._handle_captures(captured_stones)
 
-        # suicide is illegal
+        #自杀式非法的
         if len(new_group.liberties) == 0:
             raise IllegalMove
 
+        #返回提掉子的集合
         return captured_stones
 
     def _create_group(self, color, c, liberties):
+        '''
+        将新的组添加进groups、group_index、liberty_cache中
+        返回新的组实例
+        '''
         self.max_group_id += 1
         new_group = Group(self.max_group_id, set([c]), liberties, color)
         self.groups[new_group.id] = new_group
@@ -197,41 +275,65 @@ class LibertyTracker():
         return new_group
 
     def _merge_groups(self, group1_id, group2_id):
+        '''将组1和组2进行合并'''
         group1 = self.groups[group1_id]
         group2 = self.groups[group2_id]
+        #去重地将g2元素添加进g1中
         group1.stones.update(group2.stones)
+        #删除g2
         del self.groups[group2_id]
+        #修改组id映射图
         for s in group2.stones:
             self.group_index[s] = group1_id
-
+        
+        #更新自由点映射图
         self._update_liberties(group1_id, add=group2.liberties, remove=(group2.stones | group1.stones))
-
+        #返回g1
         return group1
 
     def _capture_group(self, group_id):
+        '''提掉该组'''
         dead_group = self.groups[group_id]
+        #删除该组
         del self.groups[group_id]
+        #将该组所有点置空
         for s in dead_group.stones:
+            #组id图
             self.group_index[s] = MISSING_GROUP_ID
+            #自由点图
             self.liberty_cache[s] = 0
+        #返回所有被提掉的子
         return dead_group.stones
 
     def _update_liberties(self, group_id, add=None, remove=None):
+        '''
+        更新自由点映射图
+
+        group_id为组1的id,
+        add为组2中的自由点坐标,
+        remove为g1和g2棋子的并集
+        '''
         group = self.groups[group_id]
         if add:
             group.liberties.update(add)
         if remove:
+            #difference_update移除两个集合都存在的元素
             group.liberties.difference_update(remove)
-
+        #自由点数
         new_lib_count = len(group.liberties)
+        #更新组1的自由点映射图
         for s in group.stones:
             self.liberty_cache[s] = new_lib_count
 
     def _handle_captures(self, captured_stones):
+        '''处理所有被提子所造成的影响'''
         for s in captured_stones:
             for n in NEIGHBORS[s]:
+                #对于每一个邻接组
                 group_id = self.group_index[n]
+                #若该组非空
                 if group_id != MISSING_GROUP_ID:
+                    #增加自由点
                     self._update_liberties(group_id, add={s})
 
 class Position():
