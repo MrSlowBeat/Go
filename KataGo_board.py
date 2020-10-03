@@ -2,6 +2,13 @@ import sys
 import random
 import numpy as np
 
+
+'''
+该程序为KataGo（一个强大的围棋AI）的棋盘实现和游戏规则实现的python源程序
+特点是非常复杂，没办法看懂
+'''
+
+
 #Implements legal moves without superko
 class Board:
   EMPTY = 0

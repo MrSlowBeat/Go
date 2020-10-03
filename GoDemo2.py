@@ -1,6 +1,12 @@
 #!/usr/bin/python3
 
 
+'''
+该程序实现了围棋的大部分规则，但没有实现终局和判定胜负的规则
+该程序的优点在于围棋游戏的可视化做的非常好
+'''
+
+
 # 使用Python内置GUI模块tkinter
 from tkinter import *
 # ttk覆盖tkinter部分对象，ttk对tkinter进行了优化
