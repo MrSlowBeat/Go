@@ -15,6 +15,7 @@ A PlayerMove（玩家的移动） is a (Color, Move) tuple
 from collections import namedtuple
 import copy
 import itertools
+import time
 
 import numpy as np
 
@@ -372,15 +373,24 @@ class Position():
         new_lib_tracker = copy.deepcopy(self.lib_tracker)
         return Position(new_board, self.n, self.komi, self.caps, new_lib_tracker, self.ko, self.recent, self.to_play)
 
-    def __str__(self):
+    def __str__(self, colors=True):
         '''对象打印函数，返回棋盘情况的字符串'''
-        pretty_print_map = {
-            WHITE: 'O',
-            EMPTY: '.',
-            BLACK: 'X',
-            FILL: '#',
-            KO: '*',
-        }
+        if colors:
+            pretty_print_map = {
+                WHITE: '\x1b[0;31;47mO',
+                EMPTY: '\x1b[0;31;43m.',
+                BLACK: '\x1b[0;31;40mX',
+                FILL: '#',
+                KO: '*',
+            }
+        else:
+            pretty_print_map = {
+                WHITE: 'O',
+                EMPTY: '.',
+                BLACK: 'X',
+                FILL: '#',
+                KO: '*',
+            }
         board = np.copy(self.board)
         captures = self.caps
         #若ko非空，则放置ko棋子
@@ -394,6 +404,8 @@ class Position():
                 #指明上一步走的位置：如果上一个playermove存在，且坐标和其对应的move相同，则添加< ； 否则添加空格
                 appended = '<' if (self.recent and (i, j) == self.recent[-1].move) else ' '
                 row.append(pretty_print_map[board[i,j]] + appended)
+                if colors:
+                    row.append('\x1b[0m')
             raw_board_contents.append(''.join(row))
         #行标签 N~1
         row_labels = ['%2d ' % i for i in range(N, 0, -1)]
@@ -463,7 +475,7 @@ class Position():
         return True
     
     def all_legal_moves(self):
-        '''返回一个 np.ndarray, 尺寸为 go.N**2 + 1, 其中 1 = legal, 0 = illegal'''
+        '''返回一个 np.ndarray, 尺寸为 N x N, 其中 1 = legal, 0 = illegal'''
         #默认每个棋子都是合法的
         legal_moves = np.ones([N, N], dtype=np.int8)
         #非空的不合法
@@ -494,7 +506,8 @@ class Position():
             legal_moves[self.ko] = 0
 
         # 弃子是合法的（该ndarray的最后一个？）
-        return np.concatenate([legal_moves.ravel(), [1]])
+        # np.concatenate([legal_moves.ravel(), [1]])
+        return legal_moves
     
     def pass_move(self, mutate=False):
         '''弃子，返回弃子后的position对象'''
@@ -577,7 +590,7 @@ class Position():
         return pos
     
     def is_game_over(self):
-        '''判断游戏是否结束'''
+        '''判断游戏是否结束，结束则返回1，否则返回0'''
         #move的个数大于2，且最后两步都是弃子
         return (len(self.recent) >= 2 and
                 self.recent[-1].move is None and
@@ -629,4 +642,35 @@ class Position():
             #平局
             return 'DRAW'
 
-set_board_size(19)
+
+def play_one_game(pos, printer=True):
+    '''玩一局游戏，机器人随机走合法的落子点，而且不走自己的眼'''
+    while not pos.is_game_over():
+        if printer:
+            print(pos)
+        legal_place = np.nonzero(pos.all_legal_moves())
+        if len(legal_place[0])==0:
+            if printer:
+                print('player:' + ('BLACK' if pos.to_play == BLACK else 'WHITE'))
+                print('pass move')
+            pos.pass_move(mutate=True)
+            continue
+        random_index = np.random.choice(len(legal_place[0]))
+        c = legal_place[0][random_index], legal_place[1][random_index]
+        if printer:
+            print('player:' + ('BLACK' if pos.to_play == BLACK else 'WHITE'))
+            print('move:(%d,%d)' % (c[0],c[1]))
+        pos.play_move(c, color=pos.to_play, mutate=True)
+        #time.sleep(1)
+    print(pos)
+    print(pos.result())
+
+
+def main():
+    set_board_size(9)
+    p = Position()
+    play_one_game(p)
+
+
+if __name__ == '__main__':
+    main()

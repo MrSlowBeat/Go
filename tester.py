@@ -1,5 +1,9 @@
 import numpy as np
-a = np.zeros(10, dtype=np.int8)
-s = np.where(a == 0)
+a = np.array([[0,0,0,0,0],[0,0,0,0,0]])
+b = np.nonzero(a)
+# c = len(b[0])
+# d = np.random.choice(c)
+# e = b[0][d], b[1][d]
 
-print(s, np.ndarray([2,2]))
+
+print(len(b[0])==0)

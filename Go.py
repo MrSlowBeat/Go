@@ -1,65 +1,30 @@
+
 from collections import namedtuple
 import copy
 import itertools
 import numpy as np
-import torch
-import time
-from Storage import Log
-from Game import AbstractArgs, AbstractGame
 
 
-class Args(AbstractArgs):
-    """
-    参数类
-    """
-    def __init__(self):
-        super().__init__()
-        self.board_size = 9
-        self.action_size = self.board_size ** 2
-        # self.num_max_layers = 3 * (self.board_size ** 2 - 8)
-        self.GAME_NAME = 'Go'
-        # # Mcts search parameters
-        # self.num_iter = 1000
-        # self.num_play_game = 20
-        # self.train_num_search = 1000
-        # self.random_num_search = 300
-        # self.sharpening_policy_t = 2
-        # self.smoothing_policy_t = 0.7
-        # self.smooth_policy_window = 3
-        # self.search_layers_threshold = 51
-        # self.Cpuct = 5
-        # # replay_buffer params
-        # self.N_threshold = 50
-        # self.N_Q_threshold = 1.5
-        # self.replay_decay_rate = 0.3
-        # self.replay_buffer_threshold = 5
-        # # NetWork params
-        # self.load_latest_model = False
-        # self.num_net = 3
-        # self.lr = 0.001
-        # self.lr_iter_threshold = 60
-        # self.weight_decay = 0.0001
-        # self.epochs = 10
-        # self.batch_size = 64
-        # self.num_params = 0
-        # # Process
-        # self.multiprocess = False
-        # self.num_process = 4
-        # self.SingleProcess = -1
-        # self.print_log_process = 0
-        # # Gpu Parallel
-        # self.cuda = torch.cuda.is_available()
-        # self.gpu_parallel = False
-        # self.gpu_num = torch.cuda.device_count()
-        # self.gpu_ids = range(0, torch.cuda.device_count(), 1)
-        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # self.EPS = 1e-10
-        # # old and new networks PK
-        # self.Pk = False
-        # self.update_iter_threshold = 0.5
-        # self.num_pk = 10
-        # self.pk_step_threshold = 3
-        # self.start_pk_iter_threshold = 20
+class AbstractGame:
+    pass
+
+
+class PlayerMove(namedtuple('PlayerMove', ['color', 'move'])):
+    '''数据结构：玩家的移动：(颜色, 移动(int, int)) 元组'''
+    pass
+
+
+class IllegalMove(Exception):
+    '''报错：非法的移动'''
+    pass
+
+
+# 这些变量由set_board_size函数初始化
+N = None
+ALL_COORDS = []
+EMPTY_BOARD = None
+NEIGHBORS = {}
+DIAGONALS = {}
 
 
 class Game(AbstractGame):
