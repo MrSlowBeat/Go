@@ -1,3 +1,6 @@
+from collections import namedtuple
+import copy
+import itertools
 import numpy as np
 import torch
 import time
@@ -66,15 +69,13 @@ class Game(AbstractGame):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.BLACK = 1
-        self.WHITE = 2
-        self.EMPTY = 0
-        self.OUT = -1
-        self.GAME_END = -1
-        # self.directions = [(1, 1), (1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (-1, 1), (0, 1)]
+        # 用numpy array表示一个棋盘, 0是空, 1是黑, -1是白
+        # 这意味着交换颜色将数组乘以-1即可
+        self.WHITE, self.EMPTY, self.BLACK, self.FILL, self.KO, self.UNKNOWN = range(-1, 5)
+        # 表示LibertyTracker对象中的“未找到组”
+        self.MISSING_GROUP_ID = -1
+
         self.board_size = args.board_size
-        # self.step = [0, 1, 2]
-        # 合法的位置
         self.legal_pos = dict()
         self.action_size = args.board_size ** 2
         # self.Cpuct = args.Cpuct
@@ -83,13 +84,10 @@ class Game(AbstractGame):
         self.board2d_shape = (self.board_size, self.board_size)
         # 棋盘的一维形状
         self.board1d_shape = (self.action_size, )
-        self.types = tuple(("queen", "next", "arrow"))
-        self.flag = {"queen": 1, "next": 1, "arrow": -1}
+        # self.types = tuple(("queen", "next", "arrow"))
+        # self.flag = {"queen": 1, "next": 1, "arrow": -1}
         self.player = None
         self.board = None
-        self.last_1_board = None
-        self.last_2_board = None
-        self.last_3_board = None
         self.init_board()
         self.all_moves = None
         # self.init_pre_table()

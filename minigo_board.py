@@ -404,32 +404,37 @@ class Position():
         return True
 
     def all_legal_moves(self):
-        'Returns a np.array of size go.N**2 + 1, with 1 = legal, 0 = illegal'
-        # by default, every move is legal
+        '返回一个 np.array, 尺寸为 go.N**2 + 1, 其中 1 = legal, 0 = illegal'
+        #默认每个棋子都是合法的
         legal_moves = np.ones([N, N], dtype=np.int8)
-        # ...unless there is already a stone there
+        #非空的不合法
         legal_moves[self.board != EMPTY] = 0
-        # calculate which spots have 4 stones next to them
-        # padding is because the edge always counts as a lost liberty.
+        #计算有4个邻接子的点
+        #padding 是因为超出边缘的总是算作遗失的自由点
         adjacent = np.ones([N + 2, N + 2], dtype=np.int8)
+        #有正常子的地方为1
         adjacent[1:-1, 1:-1] = np.abs(self.board)
+        #棋盘每个点的邻接子数矩阵
         num_adjacent_stones = (adjacent[:-2, 1:-1] + adjacent[1:-1, :-2] +
                                adjacent[2:, 1:-1] + adjacent[1:-1, 2:])
-        # Surrounded spots are those that are empty and have 4 adjacent stones.
+        #Surrounded spots是空点且有4个邻接点的mask
         surrounded_spots = np.multiply(
             (self.board == EMPTY),
             (num_adjacent_stones == 4))
-        # Such spots are possibly illegal, unless they are capturing something.
-        # Iterate over and manually check each spot.
+        #这些点可能是非法的，除非他们提到了敌人的子
+        #反复迭代，手动检查每一个点
+        #nonzero返回非零索引[[x1,x2,x3,...],[y1,y2,y3,...]]
+        #transpose返回其转置[[x1,y1],[x2,y2],...]
         for coord in np.transpose(np.nonzero(surrounded_spots)):
+            #如果是自杀，则标记为非法的
             if self.is_move_suicidal(tuple(coord)):
                 legal_moves[tuple(coord)] = 0
 
-        # ...and retaking ko is always illegal
+        # ko点是非法的
         if self.ko is not None:
             legal_moves[self.ko] = 0
 
-        # and pass is always legal
+        # 弃子是合法的（该ndarray的最后一个？）
         return np.concatenate([legal_moves.ravel(), [1]])
 
     def pass_move(self, mutate=False):
