@@ -1,8 +1,9 @@
 '''
-该程序为MuGo（一个轻量级AlphaGo的复现）的棋盘定义和规则实现的python源程序
+该程序为MuGo（一个极简AlphaGo的复现）的棋盘定义和规则实现的python源程序
+后来参考minigo的代码增加了is_game_over方法，可以判断游戏是否结束
 
 A board（棋盘） is a N x N numpy array.
-A Coordinate（坐标） is a tuple index into the board.
+A Coordinate（坐标） is a tuple(int, int) index into the board.
 A Move（移动） is a (Coordinate c | None).
 A PlayerMove（玩家的移动） is a (Color, Move) tuple
 
@@ -20,13 +21,14 @@ import numpy as np
 WHITE, EMPTY, BLACK, FILL, KO, UNKNOWN = range(-1, 5)
 
 class PlayerMove(namedtuple('PlayerMove', ['color', 'move'])):
+    '''数据结构：玩家的移动：(颜色, 移动(int, int)) 元组'''
     pass
 
 # 表示LibertyTracker对象中的“未找到组”
 MISSING_GROUP_ID = -1
 
 class IllegalMove(Exception):
-    '''非法的移动'''
+    '''报错：非法的移动'''
     pass
 
 # 这些变量由set_board_size函数初始化
@@ -62,7 +64,7 @@ def set_board_size(n):
     DIAGONALS = {(x, y): list(filter(check_bounds, [(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)])) for x, y in ALL_COORDS}
 
 def place_stones(board, color, stones):
-    '''放置棋子'''
+    '''放置棋子于棋盘上'''
     for s in stones:
         board[s] = color
 
@@ -138,6 +140,7 @@ class LibertyTracker():
     #静态方法：不使用该类的属性和方法
     @staticmethod
     def from_board(board):
+        '''根据输入的棋盘board生成自由点跟踪器LibertyTracker'''
         #拷贝该棋盘
         board = np.copy(board)
         #当前组的id
@@ -203,7 +206,7 @@ class LibertyTracker():
         return LibertyTracker(new_group_index, new_groups, liberty_cache=new_lib_cache, max_group_id=self.max_group_id)
 
     def add_stone(self, color, c):
-        '''添加一个子'''
+        '''在棋盘上添加一个子，返回提掉子的集合set{(int,int),...}'''
         #断言该点没有组
         assert self.group_index[c] == MISSING_GROUP_ID
         #提掉的子集合
@@ -275,7 +278,7 @@ class LibertyTracker():
         return new_group
 
     def _merge_groups(self, group1_id, group2_id):
-        '''将组1和组2进行合并'''
+        '''将组1和组2进行合并,返回组1'''
         group1 = self.groups[group1_id]
         group2 = self.groups[group2_id]
         #去重地将g2元素添加进g1中
@@ -292,7 +295,7 @@ class LibertyTracker():
         return group1
 
     def _capture_group(self, group_id):
-        '''提掉该组'''
+        '''提掉该组，返回所有被提掉的子的坐标set{(int,int)}'''
         dead_group = self.groups[group_id]
         #删除该组
         del self.groups[group_id]
@@ -339,30 +342,36 @@ class LibertyTracker():
 class Position():
     def __init__(self, board=None, n=0, komi=7.5, caps=(0, 0), lib_tracker=None, ko=None, recent=tuple(), to_play=BLACK):
         '''
-        board: a numpy array
-        n: an int representing moves played so far
-        komi: a float, representing points given to the second player.
-        caps: a (int, int) tuple of captures for B, W.
-        lib_tracker: a LibertyTracker object
-        ko: a Move
-        recent: a tuple of PlayerMoves, such that recent[-1] is the last move.
-        to_play: BLACK or WHITE
+        初始化函数
+
+        board: 一个 numpy array
+        n: 一个表示到目前为止的moves个数（第几手）的 int
+        komi: 一个 float, 代表第一个玩家给第二个玩家贴的目数
+        caps: 一个 (int, int) 元组 of 提子数（该色棋子提掉对方棋子的个数） for B（黑子）, W（白子）
+        lib_tracker: 一个 LibertyTracker 对象
+        ko: 一个 Move
+        recent: 一个由PlayerMoves构成的元组, 其中 recent[-1] 表示 the last move（上一个移动）.
+        to_play: BLACK(int) 或 WHITE(int)，将要落的子的颜色
         '''
+        #载入或新建棋盘
         self.board = board if board is not None else np.copy(EMPTY_BOARD)
         self.n = n
         self.komi = komi
         self.caps = caps
+        #载入lib_tracker或根据棋盘构造lib_tracker
         self.lib_tracker = lib_tracker or LibertyTracker.from_board(self.board)
         self.ko = ko
         self.recent = recent
         self.to_play = to_play
 
     def __deepcopy__(self, memodict={}):
+        '''深拷贝函数'''
         new_board = np.copy(self.board)
         new_lib_tracker = copy.deepcopy(self.lib_tracker)
         return Position(new_board, self.n, self.komi, self.caps, new_lib_tracker, self.ko, self.recent, self.to_play)
 
     def __str__(self):
+        '''对象打印函数，返回棋盘情况的字符串'''
         pretty_print_map = {
             WHITE: 'O',
             EMPTY: '.',
@@ -372,55 +381,88 @@ class Position():
         }
         board = np.copy(self.board)
         captures = self.caps
+        #若ko非空，则放置ko棋子
         if self.ko is not None:
             place_stones(board, KO, [self.ko])
+        #原始棋盘内容
         raw_board_contents = []
         for i in range(N):
             row = []
             for j in range(N):
+                #指明上一步走的位置：如果上一个playermove存在，且坐标和其对应的move相同，则添加< ； 否则添加空格
                 appended = '<' if (self.recent and (i, j) == self.recent[-1].move) else ' '
                 row.append(pretty_print_map[board[i,j]] + appended)
             raw_board_contents.append(''.join(row))
-
+        #行标签 N~1
         row_labels = ['%2d ' % i for i in range(N, 0, -1)]
+        #带标注的每一行的内容
         annotated_board_contents = [''.join(r) for r in zip(row_labels, raw_board_contents, row_labels)]
+        #列标签
         header_footer_rows = ['   ' + ' '.join('ABCDEFGHJKLMNOPQRST'[:N]) + '   ']
+        #带标注的棋盘
+        #itertools.chain将不同容器中的元素连接起来，便于遍历
         annotated_board = '\n'.join(itertools.chain(header_footer_rows, annotated_board_contents, header_footer_rows))
+        #细节：第n步，黑白提对方子的情况
         details = "\nMove: {}. Captures X: {} O: {}\n".format(self.n, *captures)
         return annotated_board + details
 
     def is_move_suicidal(self, move):
+        '''
+        判断该步是否为自杀
+
+        如果没有自由点，则为自杀，返回True；否则返回False
+        '''
+        #潜在的自由点
         potential_libs = set()
+        #对于每个邻接点
         for n in NEIGHBORS[move]:
+            #该邻接点的组id
             neighbor_group_id = self.lib_tracker.group_index[n]
+            #该点为空点
             if neighbor_group_id == MISSING_GROUP_ID:
-                # at least one liberty after playing here, so not a suicide
+                # 下完该步至少还有1个自由点，不算自杀
                 return False
+            #该邻接点的组
             neighbor_group = self.lib_tracker.groups[neighbor_group_id]
+            #同色
             if neighbor_group.color == self.to_play:
+                #将该组的自由点并入潜在的自由点
                 potential_libs |= neighbor_group.liberties
+            #如果是敌人组，且自由点数为1，则不是自杀
             elif len(neighbor_group.liberties) == 1:
-                # would capture an opponent group if they only had one lib.
+                # 相反，这可以提掉敌人的组
                 return False
-        # it's possible to suicide by connecting several friendly groups
-        # each of which had one liberty.
+        #将几个盟友组连接起来可能会造成自杀
+        #当每个组只有1个自由点时
+
+        #从潜在的自由点集合中移除该点
         potential_libs -= set([move])
+        #如果没有自由点，则为自杀；否则不是
         return not potential_libs
 
     def is_move_legal(self, move):
-        'Checks that a move is on an empty space, not on ko, and not suicide'
+        '''
+        检查一个 move 是否合法
+        检查该move是否在一个空点上, 且不是在ko上（局面重复）, 且不是自杀
+        '''
+        #若没有move操作，则合法
         if move is None:
             return True
+        #该点不为空，则非法
         if self.board[move] != EMPTY:
             return False
+        #该点是ko，则非法
         if move == self.ko:
             return False
+        #该点是自杀，则非法
         if self.is_move_suicidal(move):
             return False
 
         return True
 
     def pass_move(self, mutate=False):
+        '''弃子，返回弃子后的position对象'''
+        #若mutate（转换）开启则pos为position该对象，否则为对象的深拷贝
         pos = self if mutate else copy.deepcopy(self)
         pos.n += 1
         pos.recent += (PlayerMove(pos.to_play, None),)
@@ -429,80 +471,126 @@ class Position():
         return pos
 
     def flip_playerturn(self, mutate=False):
+        '''翻转玩家：让敌人下棋，返回翻转后的position对象'''
         pos = self if mutate else copy.deepcopy(self)
         pos.ko = None
         pos.to_play *= -1
         return pos
 
     def get_liberties(self):
+        '''获取自由点映射图'''
         return self.lib_tracker.liberty_cache
 
     def play_move(self, c, color=None, mutate=False):
-        # Obeys CGOS Rules of Play. In short:
-        # No suicides
-        # Chinese/area scoring
-        # Positional superko (this is very crudely approximate at the moment.)
+        '''执行“下一步棋”的操作'''
+        # 遵守CGOS游戏规则
+        # 不能自杀
+        # 中国/日韩 计分方式
+        # Positional superko (目前是非常粗略的估计)
+
+        #若颜色为空，则置为将要落下的子的颜色
         if color is None:
             color = self.to_play
-
+        
         pos = self if mutate else copy.deepcopy(self)
 
         if c is None:
+            #若move为空，则为弃子操作
             pos = pos.pass_move(mutate=mutate)
             return pos
 
         if not self.is_move_legal(c):
+            #非法则报错
             raise IllegalMove()
 
+        #放置一个棋子于棋盘上
         place_stones(pos.board, color, [c])
+        #返回所提掉的对方的子集合
         captured_stones = pos.lib_tracker.add_stone(color, c)
+        #将所提掉的位置置为空
         place_stones(pos.board, EMPTY, captured_stones)
 
+        #敌人的颜色
         opp_color = color * -1
 
+        #若被提掉子只有1个，且落子点仅被敌人的子包围
         if len(captured_stones) == 1 and is_koish(self.board, c) == opp_color:
+            #新的ko为被提子的坐标
             new_ko = list(captured_stones)[0]
         else:
+            #否则没有ko现象
             new_ko = None
 
         if pos.to_play == BLACK:
+            #如果是黑子下棋，则更新黑子提子数
             new_caps = (pos.caps[0] + len(captured_stones), pos.caps[1])
         else:
+            #如果是白子下棋，则更新白子提子数
             new_caps = (pos.caps[0], pos.caps[1] + len(captured_stones))
-
+        
+        #更新当前的move数
         pos.n += 1
+        #更新提子数
         pos.caps = new_caps
+        #更新ko
         pos.ko = new_ko
+        #记录该PlayerMove
         pos.recent += (PlayerMove(color, c),)
+        #让对手下棋
         pos.to_play *= -1
         return pos
-
+    
+    def is_game_over(self):
+        '''判断游戏是否结束'''
+        #move的个数大于2，且最后两步都是弃子
+        return (len(self.recent) >= 2 and
+                self.recent[-1].move is None and
+                self.recent[-2].move is None)
+    
     def score(self):
+        '''计算终局得分情况'''
+        #复制终局棋盘
         working_board = np.copy(self.board)
+        #当终局棋盘存在空点时
         while EMPTY in working_board:
+            #找到所有空点的坐标
             unassigned_spaces = np.where(working_board == EMPTY)
             c = unassigned_spaces[0][0], unassigned_spaces[1][0]
+            #返回空点整体和边界
             territory, borders = find_reached(working_board, c)
+            #边界的颜色集合
             border_colors = set(working_board[b] for b in borders)
+            #黑子边界
             X_border = BLACK in border_colors
+            #白子边界
             O_border = WHITE in border_colors
+            #如果边界只有黑子没有白子，领域颜色为黑色
             if X_border and not O_border:
                 territory_color = BLACK
+            #如果边界只有白子没有黑子，领域颜色为白色
             elif O_border and not X_border:
                 territory_color = WHITE
             else:
+                #否则领域颜色为未知
                 territory_color = UNKNOWN # dame, or seki
+            
+            #在领土上填满领域颜色棋子
             place_stones(working_board, territory_color, territory)
-
+        
+        #最终结果：黑子数-白子数-贴目数
         return np.count_nonzero(working_board == BLACK) - np.count_nonzero(working_board == WHITE) - self.komi
 
     def result(self):
+        '''返回终局结果字符串'''
         score = self.score()
         if score > 0:
+            #黑子赢了多少目
             return 'B+' + '%.1f' % score
         elif score < 0:
+            #白子赢了多少目
             return 'W+' + '%.1f' % abs(score)
         else:
+            #平局
             return 'DRAW'
 
 set_board_size(19)
