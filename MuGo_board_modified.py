@@ -507,6 +507,7 @@ class Position():
 
         # 弃子是合法的（该ndarray的最后一个？）
         # np.concatenate([legal_moves.ravel(), [1]])
+
         return legal_moves
     
     def pass_move(self, mutate=False):
@@ -562,7 +563,7 @@ class Position():
         #敌人的颜色
         opp_color = color * -1
 
-        #若被提掉子只有1个，且落子点仅被敌人的子包围
+        #若提掉子只有1个，且落子点仅被敌人的子包围
         if len(captured_stones) == 1 and is_koish(self.board, c) == opp_color:
             #新的ko为被提子的坐标
             new_ko = list(captured_stones)[0]
@@ -643,27 +644,51 @@ class Position():
             return 'DRAW'
 
 
-def play_one_game(pos, printer=True):
-    '''玩一局游戏，机器人随机走合法的落子点，而且不走自己的眼'''
-    while not pos.is_game_over():
-        if printer:
-            print(pos)
+class RandomRobot():
+    '''机器人：随机走合法的落子点，而且不走自己的眼'''
+    def select_move(self,pos,printer=True):
+        '''选择动作'''
+        #候选点列表
+        candidates = []
+        #所有可走的点索引
         legal_place = np.nonzero(pos.all_legal_moves())
-        if len(legal_place[0])==0:
+        #转换成点元组
+        for c in zip(legal_place[0],legal_place[1]):
+            #不是自己的眼才走
+            if is_eyeish(pos.board,c) != pos.to_play:
+                candidates.append(c)
+
+        #如果没有可以走的点，则返回None（弃子）
+        if len(candidates)==0:
             if printer:
                 print('player:' + ('BLACK' if pos.to_play == BLACK else 'WHITE'))
                 print('pass move')
-            pos.pass_move(mutate=True)
-            continue
-        random_index = np.random.choice(len(legal_place[0]))
-        c = legal_place[0][random_index], legal_place[1][random_index]
+            return None
+        else:
+            #若有，则随机选择一个点进行移动
+            random_index = np.random.choice(len(candidates))
+            chosen_move = candidates[random_index]
+            if printer:
+                print('player:' + ('BLACK' if pos.to_play == BLACK else 'WHITE'))
+                print('move:(%d,%d)' % (chosen_move[0],chosen_move[1]))
+            return chosen_move
+
+
+def play_one_game(pos, printer=True):
+    '''玩一局游戏'''
+    robot = RandomRobot()
+    if printer:
+        print("initial board")
+        print(pos)
+    while not pos.is_game_over():
+        chosen_move = robot.select_move(pos,printer)
+        pos.play_move(chosen_move, color=pos.to_play, mutate=True)
         if printer:
-            print('player:' + ('BLACK' if pos.to_play == BLACK else 'WHITE'))
-            print('move:(%d,%d)' % (c[0],c[1]))
-        pos.play_move(c, color=pos.to_play, mutate=True)
-        #time.sleep(1)
-    print(pos)
-    print(pos.result())
+            print(pos)
+        # time.sleep(1)
+    if printer:
+        print("result:")
+        print(pos.result()+'\n')
 
 
 def main():

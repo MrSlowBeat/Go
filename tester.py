@@ -6,4 +6,4 @@ b = np.nonzero(a)
 # e = b[0][d], b[1][d]
 
 
-print(len(b[0])==0)
+print(None !=-1)
