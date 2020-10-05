@@ -1,6 +1,6 @@
 '''
-该程序为MuGo（一个极简AlphaGo的复现）的棋盘定义和规则实现的python源程序
-后来参考minigo的代码:
+该程序为参考MuGo（一个极简AlphaGo的复现）的棋盘定义和规则实现的python源程序
+后来又参考minigo的代码:
 1.在position类中增加了is_game_over方法，可以判断游戏是否结束
 2.在position类中增加了all_legal_moves方法，可以返回所有合法落子点的mask
 
@@ -658,7 +658,7 @@ class Position():
 
 class RandomRobot():
     '''机器人：随机走合法的落子点，而且不走自己的眼'''
-    def select_move(self,pos,printer=True):
+    def select_move(self, pos, not_fill_own_eye=True, printer=True):
         '''选择动作'''
         #候选点列表
         candidates = []
@@ -666,8 +666,12 @@ class RandomRobot():
         legal_place = np.nonzero(pos.all_legal_moves())
         #转换成点元组
         for c in zip(legal_place[0],legal_place[1]):
-            #不是自己的眼才走
-            if is_eyeish(pos.board,c) != pos.to_play:
+            if not_fill_own_eye:
+                #不走自己的眼
+                if is_eyeish(pos.board,c) != pos.to_play:
+                    candidates.append(c)
+            else:
+                #可以走自己的眼
                 candidates.append(c)
 
         #如果没有可以走的点，则返回None（弃子）
@@ -686,18 +690,18 @@ class RandomRobot():
             return chosen_move
 
 
-def play_one_game(pos, printer=True):
+def play_one_game(pos, not_fill_own_eye=True,printer=True):
     '''玩一局游戏'''
     robot = RandomRobot()
     if printer:
         print("initial board")
         print(pos)
     while not pos.is_game_over():
-        chosen_move = robot.select_move(pos,printer)
+        chosen_move = robot.select_move(pos, not_fill_own_eye, printer)
         pos.play_move(chosen_move, color=pos.to_play, mutate=True)
         if printer:
             print(pos)
-        time.sleep(0.3)
+        # time.sleep(0.3)
     if printer:
         print("result:")
         print(pos.result()+'\n')
