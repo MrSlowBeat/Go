@@ -12,27 +12,32 @@ A PlayerMove（玩家的移动） is a (Color, Move) tuple
 (0, 0) 为棋盘的左上角, and (18, 0) 为棋盘的左下角
 '''
 
+
 from collections import namedtuple
 import copy
 import itertools
 import time
-
 import numpy as np
+
 
 # 用numpy array表示一个棋盘, 0是空, 1是黑, -1是白
 # 这意味着交换颜色将数组乘以-1即可
 WHITE, EMPTY, BLACK, FILL, KO, UNKNOWN = range(-1, 5)
 
+
 class PlayerMove(namedtuple('PlayerMove', ['color', 'move'])):
     '''数据结构：玩家的移动：(颜色, 移动(int, int)) 元组'''
     pass
 
+
 # 表示LibertyTracker对象中的“未找到组”
 MISSING_GROUP_ID = -1
+
 
 class IllegalMove(Exception):
     '''报错：非法的移动'''
     pass
+
 
 # 这些变量由set_board_size函数初始化
 N = None
@@ -40,6 +45,7 @@ ALL_COORDS = []
 EMPTY_BOARD = None
 NEIGHBORS = {}
 DIAGONALS = {}
+
 
 def set_board_size(n):
     '''
@@ -66,10 +72,12 @@ def set_board_size(n):
     #[字典]每个坐标对应的值：对角线坐标，去除超出边界的点
     DIAGONALS = {(x, y): list(filter(check_bounds, [(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)])) for x, y in ALL_COORDS}
 
+
 def place_stones(board, color, stones):
     '''放置棋子于棋盘上'''
     for s in stones:
         board[s] = color
+
 
 def find_reached(board, c):
     '''
@@ -92,6 +100,7 @@ def find_reached(board, c):
                 reached.add(n)
     return chain, reached
 
+
 def is_koish(board, c):
     '检查c（空点）是否被1个颜色包围，并返回该颜色'
     # 非空则返回None
@@ -103,6 +112,7 @@ def is_koish(board, c):
         return list(neighbors)[0]
     else:
         return None
+
 
 def is_eyeish(board, c):
     '检查c是否为1个眼, 来限制MC rollouts'
@@ -126,6 +136,7 @@ def is_eyeish(board, c):
     else:
         #否则是眼，返回颜色
         return color
+
 
 class Group(namedtuple('Group', ['id', 'stones', 'liberties', 'color'])):
     '''
@@ -341,6 +352,7 @@ class LibertyTracker():
                 if group_id != MISSING_GROUP_ID:
                     #增加自由点
                     self._update_liberties(group_id, add={s})
+
 
 class Position():
     def __init__(self, board=None, n=0, komi=7.5, caps=(0, 0), lib_tracker=None, ko=None, recent=tuple(), to_play=BLACK):
@@ -685,7 +697,7 @@ def play_one_game(pos, printer=True):
         pos.play_move(chosen_move, color=pos.to_play, mutate=True)
         if printer:
             print(pos)
-        # time.sleep(1)
+        time.sleep(0.3)
     if printer:
         print("result:")
         print(pos.result()+'\n')
