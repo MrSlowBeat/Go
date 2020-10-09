@@ -707,10 +707,20 @@ def play_one_game(pos, not_fill_own_eye=True,printer=True):
         print(pos.result()+'\n')
 
 
+def test_runtime(pos,times):
+    '''测试运行时间'''
+    ts =time.time()
+    for i in range(times):
+        pos.all_legal_moves()
+    te =time.time()
+    print(te-ts)
+
+
 def main():
     set_board_size(9)
     p = Position()
-    play_one_game(p)
+    # play_one_game(p)
+    test_runtime(p,10000)
 
 
 if __name__ == '__main__':
