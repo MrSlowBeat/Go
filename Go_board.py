@@ -3,6 +3,10 @@
 后来又参考minigo的代码:
 1.在position类中增加了is_game_over方法，可以判断游戏是否结束
 2.在position类中增加了all_legal_moves方法，可以返回所有合法落子点的mask
+3.增加了replay_position生成器，可以重演position的整个历史
+4.在position类中增加了board_deltas变量，用于存储每一步的变化，用于快速恢复前7盘棋局
+5.完善了IllegalMove非法报错的每个对象代码的编写
+6.将NEIGHBORS和DIAGONALS词典内部的数据结构改成元组，加快运行速度
 
 A board（棋盘） is a N x N numpy array.
 A Coordinate（坐标） is a tuple(int, int) index into the board.
@@ -27,6 +31,11 @@ WHITE, EMPTY, BLACK, FILL, KO, UNKNOWN = range(-1, 5)
 
 class PlayerMove(namedtuple('PlayerMove', ['color', 'move'])):
     '''数据结构：玩家的移动：(颜色, 移动(int, int)) 元组'''
+    pass
+
+
+class PositionWithContext(namedtuple('SgfPosition', ['position', 'next_move', 'result'])):
+    '''带上下文的position'''
     pass
 
 
@@ -68,15 +77,35 @@ def set_board_size(n):
         return c[0] % n == c[0] and c[1] % n == c[1]
     
     #[字典]每个坐标对应的值：邻居坐标，去除超出边界的点
-    NEIGHBORS = {(x, y): list(filter(check_bounds, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)])) for x, y in ALL_COORDS}
+    NEIGHBORS = {(x, y): tuple(filter(check_bounds, [(x+1, y), (x-1, y), (x, y+1), (x, y-1)])) for x, y in ALL_COORDS}
     #[字典]每个坐标对应的值：对角线坐标，去除超出边界的点
-    DIAGONALS = {(x, y): list(filter(check_bounds, [(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)])) for x, y in ALL_COORDS}
+    DIAGONALS = {(x, y): tuple(filter(check_bounds, [(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)])) for x, y in ALL_COORDS}
 
 
 def place_stones(board, color, stones):
     '''放置棋子于棋盘上'''
     for s in stones:
         board[s] = color
+
+
+def replay_position(position, result):
+    '''
+    一个围棋的封装器
+    该生成器可以使Position 重演它的历史
+    假设开始是一个空的Position(i.e. 没有障碍，且历史是有穷尽的)
+
+    结果必须作为参数传入, 因为不能仅根据position的历史来推断是否投降
+
+    用法如下：
+    for position_w_context in replay_position(position):
+        print(position_w_context.position)
+    '''
+    assert position.n == len(position.recent), "Position history is incomplete"
+    pos = Position(komi=position.komi)
+    for player_move in position.recent:
+        color, next_move = player_move
+        yield PositionWithContext(pos, next_move, result)
+        pos = pos.play_move(next_move, color=color)
 
 
 def find_reached(board, c):
@@ -272,9 +301,9 @@ class LibertyTracker():
         #增加盟友组自由点
         self._handle_captures(captured_stones)
 
-        #自杀式非法的
+        #自杀是非法的
         if len(new_group.liberties) == 0:
-            raise IllegalMove
+            raise IllegalMove("Move at {} would commit suicide!\n".format(c))
 
         #返回提掉子的集合
         return captured_stones
@@ -355,7 +384,7 @@ class LibertyTracker():
 
 
 class Position():
-    def __init__(self, board=None, n=0, komi=7.5, caps=(0, 0), lib_tracker=None, ko=None, recent=tuple(), to_play=BLACK):
+    def __init__(self, board=None, n=0, komi=7.5, caps=(0, 0), lib_tracker=None, ko=None, recent=tuple(), board_deltas=None, to_play=BLACK):
         '''
         初始化函数
 
@@ -367,6 +396,10 @@ class Position():
         ko: 一个 Move
         recent: 一个由PlayerMoves构成的元组, 其中 recent[-1] 表示 the last move（上一个移动）.
         to_play: BLACK(int) 或 WHITE(int)，将要落的子的颜色
+        board_deltas：一个形状为 (n, go.N, go.N) 的np.array
+        表示每一个移动对棋盘造成的改变 (已做的移动和提子)
+            应该满足 next_pos.board - next_pos.board_deltas[0] == pos.board
+            0代表当前增量，1代表上1次增量，以此类推，一共记录7个增量（0-6），可以计算出前7次的状态，加上当前状态一共有8个状态
         '''
         #载入或新建棋盘
         self.board = board if board is not None else np.copy(EMPTY_BOARD)
@@ -377,13 +410,14 @@ class Position():
         self.lib_tracker = lib_tracker or LibertyTracker.from_board(self.board)
         self.ko = ko
         self.recent = recent
+        self.board_deltas = board_deltas if board_deltas is not None else np.zeros([0, N, N], dtype=np.int8)
         self.to_play = to_play
 
     def __deepcopy__(self, memodict={}):
         '''深拷贝函数'''
         new_board = np.copy(self.board)
         new_lib_tracker = copy.deepcopy(self.lib_tracker)
-        return Position(new_board, self.n, self.komi, self.caps, new_lib_tracker, self.ko, self.recent, self.to_play)
+        return Position(new_board, self.n, self.komi, self.caps, new_lib_tracker, self.ko, self.recent, self.board_deltas, self.to_play)
 
     def __str__(self, colors=True):
         '''对象打印函数，返回棋盘情况的字符串'''
@@ -528,6 +562,7 @@ class Position():
         pos = self if mutate else copy.deepcopy(self)
         pos.n += 1
         pos.recent += (PlayerMove(pos.to_play, None),)
+        pos.board_deltas = np.concatenate((np.zeros([1, N, N], dtype=np.int8),pos.board_deltas[:6]))
         pos.to_play *= -1
         pos.ko = None
         return pos
@@ -563,7 +598,7 @@ class Position():
 
         if not self.is_move_legal(c):
             #非法则报错
-            raise IllegalMove()
+            raise IllegalMove("{} move at {} is illegal: \n{}".format("Black" if self.to_play == BLACK else "White",c, self))
 
         #放置一个棋子于棋盘上
         place_stones(pos.board, color, [c])
@@ -574,6 +609,13 @@ class Position():
 
         #敌人的颜色
         opp_color = color * -1
+
+        #定义新的增量棋盘
+        new_board_delta = np.zeros([N, N], dtype=np.int8)
+        #在该位置落自己的子
+        new_board_delta[c] = color
+        #将提掉的子按照自己的颜色放置到棋盘上
+        place_stones(new_board_delta, color, captured_stones)
 
         #若提掉子只有1个，且落子点仅被敌人的子包围
         if len(captured_stones) == 1 and is_koish(self.board, c) == opp_color:
@@ -598,6 +640,9 @@ class Position():
         pos.ko = new_ko
         #记录该PlayerMove
         pos.recent += (PlayerMove(color, c),)
+
+        # 记录前7个deltas - 用于提取前8个游戏状态
+        pos.board_deltas = np.concatenate((new_board_delta.reshape(1, N, N),pos.board_deltas[:6]))
         #让对手下棋
         pos.to_play *= -1
         return pos
@@ -719,8 +764,8 @@ def test_runtime(pos,times):
 def main():
     set_board_size(9)
     p = Position()
-    # play_one_game(p)
-    test_runtime(p,10000)
+    play_one_game(p)
+    # test_runtime(p,10000)
 
 
 if __name__ == '__main__':
