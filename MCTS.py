@@ -101,6 +101,7 @@ class MCTS(object):
         self._root = TreeNode(None, 1.0)
         self._policy = policy_value_fn
         self._c_puct = c_puct
+        # 模拟次数
         self._n_playout = n_playout
 
     def _playout(self, state):
@@ -139,11 +140,11 @@ class MCTS(object):
 
     def get_move_probs(self, state, temp=1e-3):
         """
-        按顺序运行模拟返回可行的 a 和相应的p(s,a)
+        按顺序运行模拟返回可行的a和相应的p(s,a)
 
         参数：
-        state：当前状态, 包括 both game state and the current player.
-        temp：temperature parameter in (0, 1] that controls the level of exploration
+        state：当前状态, 包括游戏状态和当前玩家
+        temp：温度参数，在(0, 1]区间上控制探索等级
         返回：
         可行的 a 和相应的p(s,a)
         """        
@@ -151,16 +152,18 @@ class MCTS(object):
             state_copy = copy.deepcopy(state)
             self._playout(state_copy)
   
-        # calc the move probabilities based on the visit counts at the root node
+        # 基于根节点对其访问的次数N(s,a)来计算概率分布
+        #list(tuple(a,N(s,a) ) )
         act_visits = [(act, node._n_visits) for act, node in self._root._children.items()]
         acts, visits = zip(*act_visits)
+        #归一化的a的概率分布
         act_probs = softmax(1.0/temp * np.log(visits))       
-         
+        #返回可行的tuple(a)和相应的概率分布tuple(p(s,a) )
         return acts, act_probs
 
     def update_with_move(self, last_move):
         """
-        Step forward in the tree, keeping everything we already know about the subtree.
+        在树中向下走，保留所有已经探索过的子树
         """
         if last_move in self._root._children:
             self._root = self._root._children[last_move]
@@ -169,52 +172,61 @@ class MCTS(object):
             self._root = TreeNode(None, 1.0)
 
     def __str__(self):
+        """打印MCTS"""
         return "MCTS"
 
 
 class MCTSPlayer(object):
-    """AI player based on MCTS"""
+    """基于MCTS的AI玩家"""
 
     def __init__(self, policy_value_function,
                  c_puct=5, n_playout=2000, is_selfplay=0):
         self.mcts = MCTS(policy_value_function, c_puct, n_playout)
+        #是否为自玩
         self._is_selfplay = is_selfplay
 
     def set_player_ind(self, p):
+        """设置玩家索引"""
         self.player = p
 
     def reset_player(self):
+        """重置玩家"""
         self.mcts.update_with_move(-1)
 
     def get_action(self, board, temp=1e-3, return_prob=0):
+        """获取动作"""
+        # 所有合法的移动
         sensible_moves = board.availables
-        # the pi vector returned by MCTS as in the alphaGo Zero paper
+        # 初始化每个移动的概率P(s,a)
         move_probs = np.zeros(board.width*board.height)
         if len(sensible_moves) > 0:
+            #通过MCTS获得每个移动的概率
             acts, probs = self.mcts.get_move_probs(board, temp)
             move_probs[list(acts)] = probs
+            #如果是自玩
             if self._is_selfplay:
-                # add Dirichlet Noise for exploration (needed for
-                # self-play training)
+                # 在探索过程中增加 Dirichlet 噪声(自玩训练的需要）
+                # 根据下面的概率公式选择动作
                 move = np.random.choice(
                     acts,
                     p=0.75*probs + 0.25*np.random.dirichlet(0.3*np.ones(len(probs)))
                 )
-                # update the root node and reuse the search tree
+                # 更新MCTS的根节点，重新利用搜索树
                 self.mcts.update_with_move(move)
             else:
-                # with the default temp=1e-3, it is almost equivalent
-                # to choosing the move with the highest prob
+                # 使用默认的温度参数temp=1e-3，几乎等价于选择概率P(s,a)最大的动作
                 move = np.random.choice(acts, p=probs)
-                # reset the root node
+                # 重置MCTS根节点
                 self.mcts.update_with_move(-1)
                 # location = board.move_to_location(move)
                 # print("AI move: %d,%d\n" % (location[0], location[1]))
 
             if return_prob:
+                #返回移动，移动概率P(s,a)
                 return move, move_probs
             else:
+                #返回移动
                 return move
         else:
-            print("WARNING: the board is full")
+            print("警告：棋盘已满")
 
